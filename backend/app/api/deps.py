@@ -246,17 +246,25 @@ async def verify_sendgrid_webhook(
 
     if not key:
         if settings.is_production:
-            logger.error("SENDGRID_WEBHOOK_VERIFICATION_KEY is empty in production — failing closed")
+            logger.error(
+                "SENDGRID_WEBHOOK_VERIFICATION_KEY is empty in production — "
+                "failing closed"
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Webhook verification key unconfigured in production",
             )
         else:
-            logger.warning("SENDGRID_WEBHOOK_VERIFICATION_KEY is empty — skipping signature verification in dev mode")
+            logger.warning(
+                "SENDGRID_WEBHOOK_VERIFICATION_KEY is empty — "
+                "skipping signature verification in dev mode"
+            )
             return raw_body
 
     if not signature or not timestamp:
-        logger.warning("SendGrid webhook rejected: missing signature or timestamp header")
+        logger.warning(
+            "SendGrid webhook rejected: missing signature or timestamp header"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing required SendGrid signature headers",

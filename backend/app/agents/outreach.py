@@ -377,7 +377,9 @@ _LANGUAGE_NAMES: dict[str, str] = {
 }
 
 
-def _resolve_draft_language(lead: "Lead", supported_languages: list[str]) -> str | None:  # noqa: F821
+def _resolve_draft_language(
+    lead: "Lead", supported_languages: list[str]
+) -> str | None:  # noqa: F821
     """Return the BCP-47 code to draft in for this lead, or None for English.
 
     Reads ``lead.effective_language`` (override wins over detected). If the
@@ -465,7 +467,9 @@ class OutreachDraftAgent:
         self._db = db
         self._kb = kb
 
-    async def _top_findings(self, lead_id: uuid.UUID) -> tuple[WebsiteAudit | None, list[AuditFinding]]:
+    async def _top_findings(
+        self, lead_id: uuid.UUID
+    ) -> tuple[WebsiteAudit | None, list[AuditFinding]]:
         """Fetch the most severe findings from a lead's latest audit.
 
         Args:
@@ -1244,8 +1248,12 @@ class OutreachDraftAgent:
 
         if channel is OutreachChannel.EMAIL:
             fallback_subject, fallback_body = self._fallback_email(lead, findings, service)
+            prompt = (
+                f"{prompt_override or _EMAIL_SYSTEM_PROMPT}\n\n"
+                f"{tone_note}\n\n{language_note}"
+            ).strip()
             generated = await self._generate_with_llm(
-                f"{prompt_override or _EMAIL_SYSTEM_PROMPT}\n\n{tone_note}\n\n{language_note}".strip(),
+                prompt,
                 f"{base_context}\n\nWrite the email body.",
             )
             return DraftContent(
@@ -1261,8 +1269,12 @@ class OutreachDraftAgent:
 
         if channel is OutreachChannel.WHATSAPP:
             fallback = self._fallback_whatsapp(lead, findings, service)
+            prompt = (
+                f"{prompt_override or _WHATSAPP_SYSTEM_PROMPT}\n\n"
+                f"{tone_note}\n\n{language_note}"
+            ).strip()
             generated = await self._generate_with_llm(
-                f"{prompt_override or _WHATSAPP_SYSTEM_PROMPT}\n\n{tone_note}\n\n{language_note}".strip(),
+                prompt,
                 f"{base_context}\n\nWrite the WhatsApp message.",
             )
             return DraftContent(
@@ -1293,8 +1305,12 @@ class OutreachDraftAgent:
         # the last channel in OutreachChannel once EMAIL/WHATSAPP/LINKEDIN
         # are handled above.
         fallback = self._fallback_call_script(lead, findings, service)
+        prompt = (
+            f"{prompt_override or _CALL_SYSTEM_PROMPT}\n\n"
+            f"{tone_note}\n\n{language_note}"
+        ).strip()
         generated = await self._generate_with_llm(
-            f"{prompt_override or _CALL_SYSTEM_PROMPT}\n\n{tone_note}\n\n{language_note}".strip(),
+            prompt,
             f"{base_context}\n\nWrite the call script.",
         )
         return DraftContent(
