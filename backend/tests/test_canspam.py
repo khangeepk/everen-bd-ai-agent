@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from app.services.canspam import (
     CanSpamViolationError,
@@ -262,5 +263,5 @@ def test_sendable_validation_catches_deceptive_subject_at_send_time() -> None:
 def test_sender_identity_is_immutable() -> None:
     """Sender identity is frozen so a validated identity cannot be mutated."""
     sender = _sender()
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         sender.physical_address = "somewhere else"  # type: ignore[misc]

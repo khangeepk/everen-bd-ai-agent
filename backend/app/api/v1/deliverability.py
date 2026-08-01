@@ -127,8 +127,15 @@ async def run_check(
     try:
         check = await run_deliverability_check(db, payload.domain, payload.dkim_selectors)
     except ValueError as exc:
-        logger.exception("Deliverability check request rejected", extra={"user_id": str(user.id)})
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        logger.exception(
+            "Deliverability check request rejected",
+            extra={"user_id": str(user.id)},
+        )
+        detail = str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        ) from exc
     logger.info(
         "Deliverability check requested via API",
         extra={"user_id": str(user.id), "check_id": str(check.id), "domain": check.domain},
@@ -247,8 +254,15 @@ async def create_plan(
             created_by_id=user.id,
         )
     except WarmupConfigError as exc:
-        logger.exception("Warmup schedule request rejected", extra={"user_id": str(user.id)})
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        logger.exception(
+            "Warmup schedule request rejected",
+            extra={"user_id": str(user.id)},
+        )
+        detail = str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=detail,
+        ) from exc
     logger.info(
         "Warmup schedule created via API",
         extra={

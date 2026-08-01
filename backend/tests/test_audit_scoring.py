@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from app.services.audit_scoring import (
     Finding,
@@ -216,5 +217,5 @@ def test_findings_are_immutable() -> None:
     """Finding is frozen so audit results cannot be edited after the fact."""
     finding = _finding("a", Severity.HIGH)
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         finding.severity = Severity.LOW  # type: ignore[misc]

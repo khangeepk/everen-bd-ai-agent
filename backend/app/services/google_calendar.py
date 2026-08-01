@@ -230,7 +230,11 @@ class GoogleCalendarClient:
         calendar_entry = calendars.get(self._calendar_id, {})
         error = calendar_entry.get("errors")
         if error:
-            raise GoogleCalendarError(f"Google Calendar freeBusy error for {self._calendar_id}: {error}")
+            msg = (
+                f"Google Calendar freeBusy error for {self._calendar_id}: "
+                f"{error}"
+            )
+            raise GoogleCalendarError(msg)
 
         raw_busy = calendar_entry.get("busy", [])
         intervals = [

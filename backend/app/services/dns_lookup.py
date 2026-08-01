@@ -70,9 +70,14 @@ async def _doh_query(name: str, record_type: str, *, timeout_seconds: float) -> 
             response.raise_for_status()
             payload = response.json()
     except httpx.HTTPError as exc:
-        raise DnsLookupError(f"DNS-over-HTTPS query for {record_type} {name} failed: {exc}") from exc
+        msg = f"DNS-over-HTTPS query for {record_type} {name} failed: {exc}"
+        raise DnsLookupError(msg) from exc
     except ValueError as exc:
-        raise DnsLookupError(f"DNS-over-HTTPS response for {record_type} {name} was not valid JSON") from exc
+        msg = (
+            f"DNS-over-HTTPS response for {record_type} {name} "
+            "was not valid JSON"
+        )
+        raise DnsLookupError(msg) from exc
 
     status = payload.get("Status")
     if status is not None and status != _DNS_RCODE_NOERROR:

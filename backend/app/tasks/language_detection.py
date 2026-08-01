@@ -73,5 +73,8 @@ def detect_and_store_language_task(lead_id_str: str) -> str | None:
         lead_id = uuid.UUID(lead_id_str)
         return asyncio.run(_async_detect_and_store(lead_id))
     except Exception:
-        logger.exception("Language detection background task failed", extra={"lead_id": lead_id_str})
+        logger.exception(
+            "Language detection background task failed",
+            extra={"lead_id": lead_id_str},
+        )
         raise

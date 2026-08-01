@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from app.services.audit_scoring import FindingCategory, Severity
 from app.services.social_review import (
@@ -190,5 +191,5 @@ def test_checklist_is_immutable() -> None:
     """Checklists are frozen so a recorded review cannot be silently edited."""
     checklist = _complete()
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         checklist.profile_exists = False  # type: ignore[misc]

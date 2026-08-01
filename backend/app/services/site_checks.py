@@ -157,7 +157,7 @@ async def check_ssl(hostname: str, port: int = 443, timeout: float = 10.0) -> SS
     except ssl.SSLCertVerificationError as exc:
         logger.info("TLS certificate failed verification", extra={"host": hostname})
         return SSLStatus(supports_https=True, valid=False, error=str(exc))
-    except (OSError, asyncio.TimeoutError) as exc:
+    except (TimeoutError, OSError) as exc:
         logger.info("HTTPS connection failed", extra={"host": hostname})
         return SSLStatus(supports_https=False, valid=False, error=str(exc))
 

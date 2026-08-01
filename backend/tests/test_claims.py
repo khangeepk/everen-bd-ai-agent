@@ -6,6 +6,7 @@ Covers both Clerk-shaped and Auth.js-shaped token payloads.
 from __future__ import annotations
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from app.core.claims import ClaimError, normalize_claims
 
@@ -128,5 +129,5 @@ def test_claims_are_immutable() -> None:
     """IdentityClaims is frozen so a verified identity cannot be mutated."""
     claims = normalize_claims(_base_payload())
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         claims.subject = "attacker"  # type: ignore[misc]

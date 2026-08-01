@@ -9,6 +9,7 @@ the fix applied to the originally specified formula, where ComplianceRisk at a
 from __future__ import annotations
 
 import pytest
+from dataclasses import FrozenInstanceError
 
 from app.services.lead_scoring import (
     HOT_THRESHOLD,
@@ -215,9 +216,9 @@ def test_breakdown_and_result_are_immutable() -> None:
     breakdown = _breakdown()
     result = score_lead(breakdown)
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         result.total_score = 1.0  # type: ignore[misc]
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         breakdown.need = ComponentScore(value=1.0)  # type: ignore[misc]
 
 
