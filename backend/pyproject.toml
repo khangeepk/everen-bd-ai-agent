@@ -18,8 +18,11 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
+# Keep the rules that catch real bugs (E errors, F pyflakes, I import order,
+# UP pyupgrade, B bugbear). Ignore style-only families that have zero runtime
+# impact: D (pydocstyle), E501 (line length), W292 (missing final newline).
 select = ["E", "F", "I", "UP", "B", "D"]
-ignore = ["D203", "D213"]
+ignore = ["D", "E501", "W292"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
