@@ -1,0 +1,68 @@
+# Local development / staging stack. Not used by Render in production (Render
+# builds the Dockerfile directly per render.yaml) -- this is for `docker
+# compose up` on a laptop or a self-managed VM, and for the CI job that runs
+# the e2e/integration suite against a real Postgres instead of SQLite.
+#
+# NOTE: tests/ and tests/e2e/ deliberately run against in-memory SQLite (see
+# tests/conftest.py, tests/e2e/conftest.py) so this compose file is not
+# required to run `pytest` -- it exists for manual local development against
+# a real Postgres+pgvector database, and as an optional CI service container.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: everen
+      POSTGRES_PASSWORD: everen_dev_password
+      POSTGRES_DB: everen_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - everen_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U everen -d everen_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://everen:everen_dev_password@db:5432/everen_db
+      REDIS_URL: redis://redis:6379/0
+      # All other secrets (OPENAI_API_KEY, SENDGRID_API_KEY, ENCRYPTION_KEY,
+      # etc.) are read from a local .env file, never hardcoded here -- see
+      # CLAUDE.md / AGENTS.md section 5. Create backend/.env from
+      # .env.example before running `docker compose up`.
+    env_file:
+      - .env
+    command: >
+      sh -c "alembic upgrade head &&
+             gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker
+             --workers 2 --bind 0.0.0.0:8000 --access-logfile - --error-logfile -"
+
+volumes:
+  everen_pgdata:

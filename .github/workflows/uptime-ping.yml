@@ -1,0 +1,87 @@
+name: Uptime ping (backstop)
+
+# A free, zero-third-party-account backstop for uptime monitoring: pings the
+# deployed /health/ready endpoint every 10 minutes and opens/updates a GitHub
+# issue if it's down. This is deliberately NOT the primary uptime monitor --
+# GitHub Actions cron is not guaranteed to run exactly on schedule (GitHub
+# throttles/delays workflows on the free tier under load) and this repo can
+# only alert by opening an issue, not by SMS/push/phone call. UptimeRobot
+# (see DEPLOYMENT.md) is the primary monitor for that reason; this workflow
+# is a no-account fallback in case UptimeRobot isn't set up yet, or as a
+# second independent signal.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check readiness endpoint
+        id: check
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.HEALTH_CHECK_URL }}
+        run: |
+          if [ -z "${HEALTH_CHECK_URL:-}" ]; then
+            echo "::warning::HEALTH_CHECK_URL secret is not set -- skipping. See DEPLOYMENT.md."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if curl --fail --silent --max-time 10 "$HEALTH_CHECK_URL" > /dev/null; then
+            echo "up=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open an issue if down
+        if: steps.check.outputs.skip != 'true' && steps.check.outputs.up == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "🔴 Production health check failing";
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "uptime",
+            });
+            if (existing.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body: `The \`/health/ready\` endpoint failed at ${new Date().toISOString()}. Check the Render dashboard and recent deploys.`,
+                labels: ["uptime"],
+              });
+            }
+
+      - name: Close the issue if back up
+        if: steps.check.outputs.skip != 'true' && steps.check.outputs.up == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "uptime",
+            });
+            for (const issue of existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: "closed",
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: "Health check is passing again; closing.",
+              });
+            }

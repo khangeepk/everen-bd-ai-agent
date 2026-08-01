@@ -1,0 +1,139 @@
+name: CI/CD
+
+# Build-test-deploy pipeline (Phase E). Runs on every push and PR so a bad
+# change is caught before merge; the build/push/deploy jobs additionally
+# require push to `main` specifically, since `main` is protected (CLAUDE.md)
+# and is the only branch that should ever reach production.
+#
+# Tests run against in-memory SQLite (see backend/tests/conftest.py and
+# backend/tests/e2e/conftest.py) -- no live Postgres, OpenAI, SendGrid, or
+# Google Places credentials are used or required in CI (AGENTS.md working
+# conventions: "Mock OpenAI and SendGrid -- never call live APIs in CI").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  lint-and-test:
+    name: Lint + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Ruff lint
+        run: ruff check app tests
+
+      - name: Run tests with coverage
+        env:
+          # Dummy/placeholder values only -- Settings() needs these to
+          # construct, but no test in the suite makes a live external call
+          # with them (OpenAI/SendGrid/Places clients are monkeypatched or
+          # never exercised; see AGENTS.md "no live APIs in CI").
+          SECRET_KEY: ci-test-secret-key
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          ENCRYPTION_KEY: "E25xTJVA9vjWAdMy7inb-JtYfT_0u3pkfK15juhxPt8="
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: backend/coverage.xml
+          retention-days: 30
+
+  build-and-push:
+    name: Build + push image
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Render
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL secret is not set -- skipping deploy trigger. See DEPLOYMENT.md to configure it."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Post-deploy health check
+        env:
+          HEALTH_CHECK_URL: ${{ secrets.HEALTH_CHECK_URL }}
+        run: |
+          if [ -z "${HEALTH_CHECK_URL:-}" ]; then
+            echo "::warning::HEALTH_CHECK_URL secret is not set -- skipping post-deploy check. See DEPLOYMENT.md."
+            exit 0
+          fi
+          # Render deploys typically take 30-90s; poll rather than fail fast.
+          for attempt in $(seq 1 10); do
+            if curl --fail --silent "$HEALTH_CHECK_URL" > /dev/null; then
+              echo "Health check passed on attempt $attempt."
+              exit 0
+            fi
+            echo "Health check attempt $attempt failed, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::Post-deploy health check never succeeded."
+          exit 1

@@ -1,0 +1,359 @@
+{
+  "name": "SendGrid Health Monitor — Daily Deliverability Check",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6,
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-trigger",
+      "name": "Daily 06:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-domains",
+              "name": "domains",
+              "value": "=[\"mail.everen.io\"]",
+              "type": "array"
+            },
+            {
+              "id": "cfg-bounce-threshold",
+              "name": "bounce_threshold",
+              "value": 0.05,
+              "type": "number"
+            },
+            {
+              "id": "cfg-spam-threshold",
+              "name": "spam_threshold",
+              "value": 0.001,
+              "type": "number"
+            },
+            {
+              "id": "cfg-open-rate-drop-pct",
+              "name": "open_rate_drop_pct",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "cfg-lookback-days",
+              "name": "lookback_days",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "cfg-backend-url",
+              "name": "backend_url",
+              "value": "http://localhost:8000",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-set-config",
+      "name": "Config — thresholds & domains",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 300],
+      "notes": "CONFIGURE HERE: edit 'domains' to your sending domains, adjust thresholds as needed, and set backend_url to your FastAPI deployment URL. Set N8N_WEBHOOK_SECRET as an n8n environment variable."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "domains",
+        "options": {}
+      },
+      "id": "node-split-domains",
+      "name": "Split per domain",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compute ISO date strings for the lookback window.\n// n8n execution context: $json contains domain + config from previous nodes.\nconst lookbackDays = $('Config — thresholds & domains').first().json.lookback_days || 30;\n\nconst now = new Date();\nconst endDate = now.toISOString().split('T')[0];  // YYYY-MM-DD (today)\n\nconst startDate = new Date(now);\nstartDate.setDate(startDate.getDate() - lookbackDays);\nconst startDateStr = startDate.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    ...$input.item.json,\n    start_date: startDateStr,\n    end_date: endDate,\n  }\n}];"
+      },
+      "id": "node-compute-dates",
+      "name": "Compute date range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.sendgrid.com/v3/stats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "start_date",
+              "value": "={{ $json.start_date }}"
+            },
+            {
+              "name": "end_date",
+              "value": "={{ $json.end_date }}"
+            },
+            {
+              "name": "aggregated_by",
+              "value": "day"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "node-sendgrid-stats",
+      "name": "SendGrid GET /v3/stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sendgrid-api-cred",
+          "name": "SendGrid API Key"
+        }
+      },
+      "notes": "Credential: create an 'Header Auth' credential in n8n named 'SendGrid API Key' with Name=Authorization and Value='Bearer SG.YOUR_KEY_HERE'."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---------------------------------------------------------------------------\n// Compute deliverability metrics from the SendGrid /v3/stats response.\n//\n// SendGrid returns an array of daily objects:\n// [ { date: 'YYYY-MM-DD', stats: [{ metrics: { requests, delivered,\n//     bounces, spam_reports, opens, unique_opens, ... } }] }, ... ]\n//\n// We compute:\n//   bounce_rate   = sum(bounces)      / sum(requests)\n//   spam_rate     = sum(spam_reports) / sum(requests)\n//   open_rate_7d  = sum(unique_opens, last 7 days) / sum(delivered, last 7 days)\n//   open_rate_30d = sum(unique_opens, all days)    / sum(delivered, all days)\n//   open_rate_drop_ppt = open_rate_30d - open_rate_7d  (positive = drop)\n// ---------------------------------------------------------------------------\n\nconst domain = $('Split per domain').item.json.domains || $input.item.json.domains;\nconst config = $('Config — thresholds & domains').first().json;\n\nconst stats = $input.item.json; // array of daily stat objects from SendGrid\n\nlet totalRequests = 0, totalDelivered = 0;\nlet totalBounces = 0, totalSpam = 0, totalUniqueOpens = 0;\nlet requests7d = 0, delivered7d = 0, uniqueOpens7d = 0;\n\nconst sevenDaysAgo = new Date();\nsevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);\n\nconst days = Array.isArray(stats) ? stats : [];\n\nfor (const day of days) {\n  const metrics = (day.stats && day.stats[0] && day.stats[0].metrics) || {};\n  const req       = metrics.requests       || 0;\n  const delivered = metrics.delivered      || 0;\n  const bounces   = metrics.bounces        || 0;\n  const spam      = metrics.spam_reports   || 0;\n  const uOpens    = metrics.unique_opens   || 0;\n\n  totalRequests    += req;\n  totalDelivered   += delivered;\n  totalBounces     += bounces;\n  totalSpam        += spam;\n  totalUniqueOpens += uOpens;\n\n  const dayDate = new Date(day.date);\n  if (dayDate >= sevenDaysAgo) {\n    requests7d    += req;\n    delivered7d   += delivered;\n    uniqueOpens7d += uOpens;\n  }\n}\n\nconst bounceRate   = totalRequests > 0 ? totalBounces / totalRequests : 0;\nconst spamRate     = totalRequests > 0 ? totalSpam    / totalRequests : 0;\nconst openRate30d  = totalDelivered > 0 ? totalUniqueOpens / totalDelivered : 0;\nconst openRate7d   = delivered7d > 0   ? uniqueOpens7d    / delivered7d     : 0;\n// Drop in percentage points (positive = open rate fell)\nconst openRateDrop = (openRate30d - openRate7d) * 100;\n\nreturn [{\n  json: {\n    domain,\n    bounce_rate:   bounceRate,\n    spam_rate:     spamRate,\n    open_rate_7d:  openRate7d,\n    open_rate_30d: openRate30d,\n    open_rate_drop_ppt: openRateDrop,\n    total_requests: totalRequests,\n    // Config thresholds (passed through for the IF node)\n    bounce_threshold:    config.bounce_threshold,\n    spam_threshold:      config.spam_threshold,\n    open_rate_drop_ppt_threshold: config.open_rate_drop_pct,\n    backend_url:         config.backend_url,\n  }\n}];"
+      },
+      "id": "node-compute-metrics",
+      "name": "Compute metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-bounce",
+              "leftValue": "={{ $json.bounce_rate }}",
+              "rightValue": "={{ $json.bounce_threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "cond-spam",
+              "leftValue": "={{ $json.spam_rate }}",
+              "rightValue": "={{ $json.spam_threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "cond-open-rate",
+              "leftValue": "={{ $json.open_rate_drop_ppt }}",
+              "rightValue": "={{ $json.open_rate_drop_ppt_threshold }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "node-threshold-check",
+      "name": "Threshold breached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build one webhook call per breached threshold.\n// Multiple thresholds can breach simultaneously — send a separate call\n// per alert_type so each is logged individually in alert_log.\n\nconst d = $input.item.json;\nconst alerts = [];\n\nif (d.bounce_rate > d.bounce_threshold) {\n  alerts.push({\n    domain:          d.domain,\n    alert_type:      'bounce_rate_exceeded',\n    metric_value:    d.bounce_rate,\n    threshold_value: d.bounce_threshold,\n    backend_url:     d.backend_url,\n  });\n}\nif (d.spam_rate > d.spam_threshold) {\n  alerts.push({\n    domain:          d.domain,\n    alert_type:      'spam_rate_exceeded',\n    metric_value:    d.spam_rate,\n    threshold_value: d.spam_threshold,\n    backend_url:     d.backend_url,\n  });\n}\nif (d.open_rate_drop_ppt > d.open_rate_drop_ppt_threshold) {\n  alerts.push({\n    domain:          d.domain,\n    alert_type:      'open_rate_drop',\n    metric_value:    d.open_rate_drop_ppt,\n    threshold_value: d.open_rate_drop_ppt_threshold,\n    backend_url:     d.backend_url,\n  });\n}\n\nreturn alerts.map(a => ({ json: a }));"
+      },
+      "id": "node-build-alerts",
+      "name": "Build alert payloads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1920, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.backend_url }}/api/v1/outreach/pause",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Webhook-Secret",
+              "value": "={{ $env.N8N_WEBHOOK_SECRET }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"domain\": \"{{ $json.domain }}\",\n  \"alert_type\": \"{{ $json.alert_type }}\",\n  \"metric_value\": {{ $json.metric_value }},\n  \"threshold_value\": {{ $json.threshold_value }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "node-call-pause-webhook",
+      "name": "POST /api/v1/outreach/pause",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2160, 200],
+      "notes": "Reads N8N_WEBHOOK_SECRET from n8n environment variables. Set it under Settings > Variables in the n8n UI (or via N8N_WEBHOOK_SECRET env var on the n8n process)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log that this domain is healthy (no thresholds breached).\nconst d = $input.item.json;\nconsole.log(`[SendGrid Health] Domain '${d.domain}' OK — bounce=${(d.bounce_rate*100).toFixed(2)}% spam=${(d.spam_rate*100).toFixed(3)}% open_rate_7d=${(d.open_rate_7d*100).toFixed(1)}%`);\nreturn [{ json: { status: 'healthy', domain: d.domain, bounce_rate: d.bounce_rate, spam_rate: d.spam_rate, open_rate_7d: d.open_rate_7d } }];"
+      },
+      "id": "node-no-alert",
+      "name": "Domain healthy — log OK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1920, 440]
+    }
+  ],
+  "connections": {
+    "Daily 06:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Config — thresholds & domains",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config — thresholds & domains": {
+      "main": [
+        [
+          {
+            "node": "Split per domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split per domain": {
+      "main": [
+        [
+          {
+            "node": "Compute date range",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute date range": {
+      "main": [
+        [
+          {
+            "node": "SendGrid GET /v3/stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SendGrid GET /v3/stats": {
+      "main": [
+        [
+          {
+            "node": "Compute metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute metrics": {
+      "main": [
+        [
+          {
+            "node": "Threshold breached?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Threshold breached?": {
+      "main": [
+        [
+          {
+            "node": "Build alert payloads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Domain healthy — log OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build alert payloads": {
+      "main": [
+        [
+          {
+            "node": "POST /api/v1/outreach/pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": ["deliverability", "sendgrid", "health-monitor"],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-31T22:00:00.000Z",
+  "versionId": "1"
+}

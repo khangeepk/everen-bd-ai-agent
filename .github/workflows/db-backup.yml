@@ -1,0 +1,48 @@
+name: Daily DB backup
+
+# Belt-and-suspenders alongside Render's built-in automated Postgres backups
+# (enabled by default on the "Basic" plan in render.yaml -- see
+# DEPLOYMENT.md): a portable pg_dump that isn't locked to Render, uploaded
+# either to S3-compatible storage (if configured) or kept as a workflow
+# artifact for 35 days.
+
+on:
+  schedule:
+    - cron: "0 9 * * *" # 09:00 UTC daily
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.BACKUP_AWS_ENDPOINT_URL }}
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::warning::DATABASE_URL secret is not set -- skipping backup. See DEPLOYMENT.md."
+            exit 0
+          fi
+          chmod +x backend/scripts/backup_db.sh
+          backend/scripts/backup_db.sh ./backups
+
+      - name: Upload dump as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/*.dump
+          retention-days: 35
+          if-no-files-found: ignore
