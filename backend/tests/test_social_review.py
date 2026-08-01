@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
 
 from app.services.audit_scoring import FindingCategory, Severity
 from app.services.social_review import (

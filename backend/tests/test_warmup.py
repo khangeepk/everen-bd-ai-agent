@@ -165,7 +165,7 @@ def test_effective_limit_uses_ramp_cap_when_lower_than_static() -> None:
 
 
 def test_effective_limit_never_exceeds_static_limit() -> None:
-    """Even if the plan's target is higher than the currently configured static limit, the static limit wins."""
+    """The static limit wins even when the plan's target is higher."""
     plan = _plan(start_volume=10, target_daily_volume=500, ramp_days=5)
     assert effective_daily_limit(plan, _START + timedelta(days=4), static_limit=200) == 200
 

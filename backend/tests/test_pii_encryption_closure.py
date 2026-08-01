@@ -1,15 +1,20 @@
 """Tests for PII encryption closure and suppression blind indexing (Phase 25).
 
 Coverage:
-* test_call_center_card_encrypted_fields_round_trip — Encrypted contact_email, contact_phone, contact_name on CallCenterCard
-* test_suppression_entry_encrypted_round_trip       — Encrypted identifier and blind index matching on SuppressionEntry
-* test_is_suppressed_case_and_whitespace_matching   — Normalization and blind index matching
-* test_previously_suppressed_address_remains_blocked— Regression test proving suppression gate works after encryption closure
+* test_call_center_card_encrypted_fields_round_trip — Encrypted
+  contact_email, contact_phone, contact_name on CallCenterCard
+* test_suppression_entry_encrypted_round_trip — Encrypted identifier and
+  blind index matching on SuppressionEntry
+* test_is_suppressed_case_and_whitespace_matching — Normalization and
+  blind index matching
+* test_previously_suppressed_address_remains_blocked — Regression test
+  proving suppression gate works after encryption closure
 """
 
 from __future__ import annotations
 
 import uuid
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +27,7 @@ from app.services.suppression import is_suppressed, suppress
 
 @pytest.mark.asyncio
 async def test_call_center_card_encrypted_fields_round_trip(db_session: AsyncSession) -> None:
-    """CallCenterCard contact_name, contact_email, and contact_phone should be encrypted at rest and decrypted on read."""
+    """CallCenterCard contact fields are encrypted at rest and decrypted on read."""
     from sqlalchemy import select
 
     card = CallCenterCard(
@@ -51,7 +56,7 @@ async def test_call_center_card_encrypted_fields_round_trip(db_session: AsyncSes
 
 @pytest.mark.asyncio
 async def test_suppression_entry_encrypted_round_trip(db_session: AsyncSession) -> None:
-    """SuppressionEntry identifier should be encrypted at rest and queryable via identifier_hash blind index."""
+    """SuppressionEntry identifier is encrypted at rest, queryable via blind index."""
     from sqlalchemy import select
 
     raw_email = "optout-user@example.com"
@@ -71,7 +76,9 @@ async def test_suppression_entry_encrypted_round_trip(db_session: AsyncSession) 
 
     assert fetched is not None
     assert fetched.identifier == "optout-user@example.com"
-    assert fetched.identifier_hash == blind_index("optout-user@example.com", purpose="suppression_identifier")
+    assert fetched.identifier_hash == blind_index(
+        "optout-user@example.com", purpose="suppression_identifier"
+    )
 
 
 

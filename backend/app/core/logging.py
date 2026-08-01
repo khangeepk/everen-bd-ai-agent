@@ -28,7 +28,9 @@ def configure_logging(level: str | None = None) -> None:
     """
     resolved = (level or settings.log_level).upper()
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(jsonlogger.JsonFormatter(_LOG_FORMAT, rename_fields={"levelname": "level"}))
+    handler.setFormatter(
+        jsonlogger.JsonFormatter(_LOG_FORMAT, rename_fields={"levelname": "level"})
+    )
 
     root = logging.getLogger()
     root.handlers = [handler]

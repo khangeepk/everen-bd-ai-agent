@@ -170,7 +170,12 @@ async def record_spend(
     await db.flush()
 
     logger.info(
-        "API spend recorded", extra={"provider": provider.value, "endpoint": endpoint, "cost_usd": cost_usd}
+        "API spend recorded",
+        extra={
+            "provider": provider.value,
+            "endpoint": endpoint,
+            "cost_usd": cost_usd,
+        },
     )
 
     if before is not None and daily_budget_usd is not None:

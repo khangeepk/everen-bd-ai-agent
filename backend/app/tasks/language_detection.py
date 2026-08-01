@@ -35,7 +35,10 @@ async def _async_detect_and_store(lead_id: uuid.UUID) -> str | None:
     async with SessionFactory() as db:
         lead = await db.get(Lead, lead_id)
         if lead is None:
-            logger.warning("Language detection task: lead not found", extra={"lead_id": str(lead_id)})
+            logger.warning(
+                "Language detection task: lead not found",
+                extra={"lead_id": str(lead_id)},
+            )
             return None
 
         # Skip if a manual override is already set

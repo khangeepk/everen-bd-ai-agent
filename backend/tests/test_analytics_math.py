@@ -72,7 +72,9 @@ def test_top_n_rejects_non_positive_n() -> None:
         top_n({"a": 1}, n=0)
 
 
-def _variant(variant_id: str, label: str, sent: int, opened: int, replied: int) -> VariantPerformance:
+def _variant(
+    variant_id: str, label: str, sent: int, opened: int, replied: int
+) -> VariantPerformance:
     """Build a VariantPerformance with only the fields these tests exercise.
 
     Args:

@@ -110,7 +110,9 @@ async def test_overview_respects_date_range(db_session: AsyncSession) -> None:
     db_session.add(_sent_draft(lead, NOW))
     await db_session.flush()
 
-    overview = await get_overview(db_session, start=NOW - timedelta(days=1), end=NOW + timedelta(days=1))
+    overview = await get_overview(
+        db_session, start=NOW - timedelta(days=1), end=NOW + timedelta(days=1)
+    )
     assert overview.emails_sent == 1
 
 
@@ -172,7 +174,10 @@ async def test_overview_counts_meetings_and_deals(db_session: AsyncSession) -> N
     await db_session.flush()
 
     await apply_stage_change(
-        db_session, hot_lead, PipelineStage.MEETING_BOOKED, PipelineTransitionReason.REPLY_CLASSIFIED
+        db_session,
+        hot_lead,
+        PipelineStage.MEETING_BOOKED,
+        PipelineTransitionReason.REPLY_CLASSIFIED,
     )
     await apply_stage_change(
         db_session, won_lead, PipelineStage.CONVERTED, PipelineTransitionReason.MANUAL
@@ -186,7 +191,11 @@ async def test_overview_counts_meetings_and_deals(db_session: AsyncSession) -> N
 @pytest.mark.asyncio
 async def test_top_industries_ranks_by_won_deals(db_session: AsyncSession) -> None:
     """Only converted leads' categories count toward the ranking."""
-    won = _lead(category="retail", contact_email="won@test.example", pipeline_stage=PipelineStage.HOT)
+    won = _lead(
+        category="retail",
+        contact_email="won@test.example",
+        pipeline_stage=PipelineStage.HOT,
+    )
     not_won = _lead(
         name="Other Co",
         category="legal",

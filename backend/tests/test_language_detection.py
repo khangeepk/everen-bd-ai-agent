@@ -26,7 +26,10 @@ from app.services.language_detection import (
 
 def test_detect_from_html_lang_attr() -> None:
     """<html lang="fr-FR"> should be normalized to 'fr'."""
-    html = '<!DOCTYPE html><html lang="fr-FR"><head><title>Test</title></head><body>Bonjour</body></html>'
+    html = (
+        '<!DOCTYPE html><html lang="fr-FR"><head><title>Test</title></head>'
+        "<body>Bonjour</body></html>"
+    )
     assert _detect_from_html(html) == "fr"
 
 

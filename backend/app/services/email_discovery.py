@@ -114,9 +114,13 @@ async def find_contact_page_emails(
     headers = {"User-Agent": USER_AGENT}
     candidates: list[EmailCandidate] = []
 
-    async with httpx.AsyncClient(timeout=timeout_seconds, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds, headers=headers, follow_redirects=True
+    ) as client:
         if not await _robots_allows(client, origin, USER_AGENT):
-            logger.info("robots.txt disallows the contact-page check", extra={"url": origin})
+            logger.info(
+                "robots.txt disallows the contact-page check", extra={"url": origin}
+            )
             return []
 
         try:
@@ -174,7 +178,10 @@ async def find_contact_page_emails(
                             )
                         )
             except httpx.HTTPError:
-                logger.info("Contact page found but could not be fetched", extra={"url": contact_url})
+                logger.info(
+                    "Contact page found but could not be fetched",
+                    extra={"url": contact_url},
+                )
 
         if not candidates and home_page is not None:
             mailtos = extract_mailto_addresses(home_page.links)

@@ -8,8 +8,9 @@ the fix applied to the originally specified formula, where ComplianceRisk at a
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
 
 from app.services.lead_scoring import (
     HOT_THRESHOLD,

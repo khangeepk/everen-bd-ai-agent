@@ -233,7 +233,11 @@ def parse_dmarc_record(txt_records: list[str]) -> DmarcResult:
             status=CheckStatus.PASS, record=record, policy=policy, messages=tuple(messages)
         )
     if policy == "quarantine":
-        messages.insert(0, "Policy is 'quarantine'. 'reject' is the strictest, fully-enforced setting.")
+        messages.insert(
+            0,
+            "Policy is 'quarantine'. 'reject' is the strictest, "
+            "fully-enforced setting.",
+        )
         return DmarcResult(
             status=CheckStatus.WARN, record=record, policy=policy, messages=tuple(messages)
         )
@@ -243,7 +247,9 @@ def parse_dmarc_record(txt_records: list[str]) -> DmarcResult:
         "Policy is 'p=none' -- monitoring only. DMARC is not actually protecting "
         "this domain yet; move to 'quarantine' then 'reject' once reports look clean.",
     )
-    return DmarcResult(status=CheckStatus.WARN, record=record, policy=policy, messages=tuple(messages))
+    return DmarcResult(
+        status=CheckStatus.WARN, record=record, policy=policy, messages=tuple(messages)
+    )
 
 
 @dataclass(frozen=True)

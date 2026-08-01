@@ -197,7 +197,9 @@ def verify_sendgrid_webhook_signature(
 
         key_str = public_key_pem_or_b64.strip()
         if not key_str.startswith("-----BEGIN"):
-            key_pem = f"-----BEGIN PUBLIC KEY-----\n{key_str}\n-----END PUBLIC KEY-----".encode("utf-8")
+            key_pem = (
+                f"-----BEGIN PUBLIC KEY-----\n{key_str}\n-----END PUBLIC KEY-----"
+            ).encode("utf-8")
         else:
             key_pem = key_str.encode("utf-8")
 

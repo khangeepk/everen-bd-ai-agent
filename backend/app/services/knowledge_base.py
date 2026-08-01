@@ -202,7 +202,11 @@ class KnowledgeBaseService:
             Counts keyed by ``"services"``, ``"portfolio_items"``, and
             ``"chunks"``.
         """
-        services = (await self._db.execute(select(Service).where(Service.is_active))).scalars().all()
+        services = (
+            (await self._db.execute(select(Service).where(Service.is_active)))
+            .scalars()
+            .all()
+        )
         items = (
             (await self._db.execute(select(PortfolioItem).where(PortfolioItem.is_public)))
             .scalars()

@@ -140,8 +140,10 @@ def test_finding_titles_are_business_readable() -> None:
 
 def test_desktop_and_mobile_share_finding_codes() -> None:
     """The same issue on both strategies uses one code, so dedup can collapse it."""
-    mobile = {f.code for f in findings_from_pagespeed(parse_pagespeed(POOR_SITE_MOBILE, Strategy.MOBILE))}
-    desktop = {f.code for f in findings_from_pagespeed(parse_pagespeed(POOR_SITE_DESKTOP, Strategy.DESKTOP))}
+    mobile_parsed = parse_pagespeed(POOR_SITE_MOBILE, Strategy.MOBILE)
+    mobile = {f.code for f in findings_from_pagespeed(mobile_parsed)}
+    desktop_parsed = parse_pagespeed(POOR_SITE_DESKTOP, Strategy.DESKTOP)
+    desktop = {f.code for f in findings_from_pagespeed(desktop_parsed)}
 
     assert "lighthouse_is-on-https" in mobile & desktop
 

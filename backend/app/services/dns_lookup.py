@@ -43,7 +43,9 @@ class DnsLookupError(RuntimeError):
     """
 
 
-async def _doh_query(name: str, record_type: str, *, timeout_seconds: float) -> list[dict[str, object]]:
+async def _doh_query(
+    name: str, record_type: str, *, timeout_seconds: float
+) -> list[dict[str, object]]:
     """Run one DNS-over-HTTPS query and return its raw answer records.
 
     Args:

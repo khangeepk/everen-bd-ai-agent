@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
 
 from app.services.canspam import (
     CanSpamViolationError,
@@ -148,7 +149,10 @@ def test_token_does_not_verify_for_a_different_recipient() -> None:
 def test_token_does_not_verify_for_a_different_draft() -> None:
     """A token is bound to the draft it was issued for."""
     token = make_unsubscribe_token(DRAFT_ID, RECIPIENT, SECRET)
-    assert verify_unsubscribe_token(token, "22222222-2222-2222-2222-222222222222", RECIPIENT, SECRET) is False
+    other_draft_id = "22222222-2222-2222-2222-222222222222"
+    assert (
+        verify_unsubscribe_token(token, other_draft_id, RECIPIENT, SECRET) is False
+    )
 
 
 def test_token_does_not_verify_with_a_different_secret() -> None:

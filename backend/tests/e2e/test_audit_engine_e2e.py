@@ -152,7 +152,9 @@ async def test_audit_happy_path_produces_completed_report(
     """A clean run against a healthy site completes with a fallback report."""
     _install_fake_audit_agent(
         monkeypatch,
-        FakePageSpeedClient(by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}),
+        FakePageSpeedClient(
+            by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}
+        ),
         FakeCrawler(result=GOOD_CRAWL),
     )
 
@@ -255,7 +257,9 @@ async def test_crawl_failure_is_recorded_but_audit_still_completes(
     """A broken crawl (robots fetch failure, DNS failure, etc.) degrades gracefully."""
     _install_fake_audit_agent(
         monkeypatch,
-        FakePageSpeedClient(by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}),
+        FakePageSpeedClient(
+            by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}
+        ),
         FakeCrawler(error=SiteCheckError("Could not resolve host")),
     )
 
@@ -276,7 +280,9 @@ async def test_invalid_url_is_rejected_before_any_check_runs(
     """A non-http(s) or relative URL is a 400, never reaches the network layer."""
     _install_fake_audit_agent(
         monkeypatch,
-        FakePageSpeedClient(by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}),
+        FakePageSpeedClient(
+            by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}
+        ),
         FakeCrawler(result=GOOD_CRAWL),
     )
 
@@ -293,7 +299,9 @@ async def test_audit_for_missing_lead_id_is_404(
     """Referencing a lead_id that does not exist is rejected before auditing."""
     _install_fake_audit_agent(
         monkeypatch,
-        FakePageSpeedClient(by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}),
+        FakePageSpeedClient(
+            by_strategy={Strategy.MOBILE: GOOD_RESULT, Strategy.DESKTOP: GOOD_RESULT}
+        ),
         FakeCrawler(result=GOOD_CRAWL),
     )
 

@@ -144,13 +144,19 @@ async def test_need_uses_the_most_recent_audit(db_session: AsyncSession) -> None
 
     db_session.add(
         WebsiteAudit(
-            lead_id=lead.id, url="https://acme.example", status=AuditStatus.COMPLETED, health_score=0.9
+            lead_id=lead.id,
+            url="https://acme.example",
+            status=AuditStatus.COMPLETED,
+            health_score=0.9,
         )
     )
     await db_session.flush()
     db_session.add(
         WebsiteAudit(
-            lead_id=lead.id, url="https://acme.example", status=AuditStatus.COMPLETED, health_score=0.1
+            lead_id=lead.id,
+            url="https://acme.example",
+            status=AuditStatus.COMPLETED,
+            health_score=0.1,
         )
     )
     await db_session.flush()
@@ -196,7 +202,9 @@ async def test_need_blends_website_and_social(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fit_is_neutral_with_no_category_or_notes(db_session: AsyncSession, fake_embedder) -> None:
+async def test_fit_is_neutral_with_no_category_or_notes(
+    db_session: AsyncSession, fake_embedder
+) -> None:
     """A lead with nothing to search on gets a neutral estimate, not a penalty."""
     lead = _lead(category=None, notes=None)
     db_session.add(lead)

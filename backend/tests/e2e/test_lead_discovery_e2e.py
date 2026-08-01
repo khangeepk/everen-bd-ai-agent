@@ -185,7 +185,11 @@ async def test_duplicate_lead_contact_email_is_rejected(
     assert first.status_code == 201
 
     second = await e2e_client.post(
-        "/api/v1/leads", json={"name": "A Different Business", "contact_email": "same@duplicate-lead.example"}
+        "/api/v1/leads",
+        json={
+            "name": "A Different Business",
+            "contact_email": "same@duplicate-lead.example",
+        },
     )
     assert second.status_code == 409
     assert "already exists" in second.json()["detail"]
@@ -199,7 +203,8 @@ async def test_places_api_failure_surfaces_as_502(
     _install_fake_places(fake, e2e_session_factory)
 
     response = await e2e_client.post(
-        "/api/v1/places/search", json={"industry": "dental clinics", "postal_code": "78701"}
+        "/api/v1/places/search",
+        json={"industry": "dental clinics", "postal_code": "78701"},
     )
 
     assert response.status_code == 502
@@ -207,7 +212,9 @@ async def test_places_api_failure_surfaces_as_502(
 
 
 async def test_places_rate_limit_hit_surfaces_as_502(
-    e2e_client: AsyncClient, e2e_session_factory: async_sessionmaker, caplog: pytest.LogCaptureFixture
+    e2e_client: AsyncClient,
+    e2e_session_factory: async_sessionmaker,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A 429 from Places is treated the same as any other provider failure.
 

@@ -7,7 +7,8 @@ Coverage:
 * test_changed_timestamp_rejected            — Timestamp modification after signing returns 401
 * test_missing_headers_rejected              — Missing X-Twilio headers return 401
 * test_production_fail_closed_unconfigured   — Empty key in production environment returns 401
-* test_invalid_webhook_creates_no_suppression— Failed signature does NOT alter DB or suppress addresses
+* test_invalid_webhook_creates_no_suppression — Failed signature does NOT
+  alter DB or suppress addresses
 * test_valid_bounce_suppresses_address       — Valid signed bounce suppresses address and flags DNC
 * test_webhook_idempotency_duplicate_event   — Duplicate event_id is safely skipped on retry
 """
@@ -77,7 +78,10 @@ def test_verify_sendgrid_webhook_signature_unit() -> None:
 
     assert verify_sendgrid_webhook_signature(_TEST_PUBLIC_KEY_PEM, body, sig, ts) is True
     assert verify_sendgrid_webhook_signature(_TEST_PUBLIC_KEY_PEM, body, "bad_sig", ts) is False
-    assert verify_sendgrid_webhook_signature(_TEST_PUBLIC_KEY_PEM, b"tampered_body", sig, ts) is False
+    result = verify_sendgrid_webhook_signature(
+        _TEST_PUBLIC_KEY_PEM, b"tampered_body", sig, ts
+    )
+    assert result is False
     assert verify_sendgrid_webhook_signature(_TEST_PUBLIC_KEY_PEM, body, sig, "99999999") is False
 
 
@@ -85,7 +89,13 @@ def test_verify_sendgrid_webhook_signature_unit() -> None:
 async def test_valid_signature_accepted(client: AsyncClient) -> None:
     """Validly signed SendGrid webhook request should be accepted (200 OK)."""
     ts = str(int(time.time()))
-    payload = [{"email": "valid-bounce@example.com", "event": "bounce", "reason": "550 User unknown"}]
+    payload = [
+        {
+            "email": "valid-bounce@example.com",
+            "event": "bounce",
+            "reason": "550 User unknown",
+        }
+    ]
     raw_body = json.dumps(payload).encode("utf-8")
     sig = _sign_sendgrid_payload(ts, raw_body)
 
@@ -96,7 +106,9 @@ async def test_valid_signature_accepted(client: AsyncClient) -> None:
     }
 
     with patch("app.core.config.settings.sendgrid_webhook_verification_key", _TEST_PUBLIC_KEY_PEM):
-        resp = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["processed"] == 1
@@ -114,7 +126,9 @@ async def test_invalid_signature_rejected(client: AsyncClient) -> None:
     }
 
     with patch("app.core.config.settings.sendgrid_webhook_verification_key", _TEST_PUBLIC_KEY_PEM):
-        resp = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp.status_code == 401
 
 
@@ -140,12 +154,16 @@ async def test_production_fail_closed_unconfigured(client: AsyncClient) -> None:
 
     with patch("app.core.config.settings.app_env", "production"), \
          patch("app.core.config.settings.sendgrid_webhook_verification_key", ""):
-        resp = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_invalid_webhook_creates_no_suppression(client: AsyncClient, db_session: AsyncSession) -> None:
+async def test_invalid_webhook_creates_no_suppression(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
     """Rejected webhook must NOT suppress any address or alter DB state."""
     target_email = "protected-target@example.com"
     ts = str(int(time.time()))
@@ -159,7 +177,9 @@ async def test_invalid_webhook_creates_no_suppression(client: AsyncClient, db_se
     }
 
     with patch("app.core.config.settings.sendgrid_webhook_verification_key", _TEST_PUBLIC_KEY_PEM):
-        resp = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp.status_code == 401
 
     # Assert target address was NOT suppressed
@@ -169,7 +189,9 @@ async def test_invalid_webhook_creates_no_suppression(client: AsyncClient, db_se
 
 
 @pytest.mark.asyncio
-async def test_webhook_idempotency_duplicate_event(client: AsyncClient, db_session: AsyncSession) -> None:
+async def test_webhook_idempotency_duplicate_event(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
     """Duplicate webhook delivery with same sg_event_id must be handled idempotently."""
     event_id = f"evt_{uuid.uuid4()}"
     ts = str(int(time.time()))
@@ -191,12 +213,16 @@ async def test_webhook_idempotency_duplicate_event(client: AsyncClient, db_sessi
 
     with patch("app.core.config.settings.sendgrid_webhook_verification_key", _TEST_PUBLIC_KEY_PEM):
         # First call — processes and suppresses
-        resp1 = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp1 = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp1.status_code == 200
         assert resp1.json()["processed"] == 1
 
         # Second call with identical sg_event_id — skips processing
-        resp2 = await client.post("/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers)
+        resp2 = await client.post(
+            "/api/v1/outreach/webhooks/bounce", content=raw_body, headers=headers
+        )
         assert resp2.status_code == 200
         assert resp2.json()["processed"] == 1
 

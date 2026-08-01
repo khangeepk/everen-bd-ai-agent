@@ -179,7 +179,10 @@ async def assess_fit(
     scored = KnowledgeBaseService.collapse_to_services(chunks)[:_FIT_SEARCH_TOP_K]
     if not scored:
         return (
-            ComponentScore(value=0.0, reasons=("No matching service found in the knowledge base.",)),
+            ComponentScore(
+                value=0.0,
+                reasons=("No matching service found in the knowledge base.",),
+            ),
             [],
         )
 

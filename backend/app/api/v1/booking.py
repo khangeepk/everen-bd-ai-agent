@@ -401,6 +401,11 @@ async def list_meetings(
         .all()
     )
     logger.info(
-        "Meetings listed", extra={"lead_id": str(lead_id), "count": len(meetings), "user_id": str(user.id)}
+        "Meetings listed",
+        extra={
+            "lead_id": str(lead_id),
+            "count": len(meetings),
+            "user_id": str(user.id),
+        },
     )
     return [MeetingResponse.model_validate(m) for m in meetings]

@@ -159,7 +159,9 @@ def _valid_outreach_sender(monkeypatch: pytest.MonkeyPatch) -> None:
     Args:
         monkeypatch: Pytest's monkeypatch fixture.
     """
-    monkeypatch.setattr(settings, "outreach_physical_address", "12 Test Street, Austin, TX 78701, USA")
+    monkeypatch.setattr(
+        settings, "outreach_physical_address", "12 Test Street, Austin, TX 78701, USA"
+    )
     monkeypatch.setattr(settings, "outreach_public_base_url", "https://e2e-test.example")
     monkeypatch.setattr(settings, "secret_key", "e2e-test-signing-secret")
     monkeypatch.setattr(settings, "outreach_from_email", "bd@e2e-test.example")

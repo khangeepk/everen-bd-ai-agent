@@ -279,7 +279,8 @@ def get_settings() -> Settings:
     """
     loaded = Settings()
     logger.info("Settings loaded", extra={"app_env": loaded.app_env})
-    if loaded.is_production and loaded.encryption_key == Settings.model_fields["encryption_key"].default:
+    default_key = Settings.model_fields["encryption_key"].default
+    if loaded.is_production and loaded.encryption_key == default_key:
         logger.error(
             "ENCRYPTION_KEY is still the default dev placeholder in a production "
             "environment. All PII encrypted with it is protected only by obscurity, "

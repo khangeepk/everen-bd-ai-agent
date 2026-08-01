@@ -129,10 +129,18 @@ async def test_duplicate_contact_email_is_rejected(db_session: AsyncSession) -> 
     from app.services.pii import blind_index
 
     email_hash = blind_index("dup@example.com", purpose="lead_contact_email")
-    db_session.add(Lead(name="Acme", contact_email="dup@example.com", contact_email_hash=email_hash))
+    db_session.add(
+        Lead(name="Acme", contact_email="dup@example.com", contact_email_hash=email_hash)
+    )
     await db_session.flush()
 
-    db_session.add(Lead(name="Acme Again", contact_email="dup@example.com", contact_email_hash=email_hash))
+    db_session.add(
+        Lead(
+            name="Acme Again",
+            contact_email="dup@example.com",
+            contact_email_hash=email_hash,
+        )
+    )
     with pytest.raises(IntegrityError):
         await db_session.flush()
 

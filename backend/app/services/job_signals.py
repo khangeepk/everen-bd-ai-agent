@@ -188,7 +188,9 @@ def _looks_like_careers_link(href: str) -> bool:
     return any(hint in path for hint in CAREERS_PATH_HINTS)
 
 
-async def find_careers_page(website_url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> str | None:
+async def find_careers_page(
+    website_url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+) -> str | None:
     """Locate a lead's careers/jobs page, if one can be found.
 
     First checks the home page's own links for one matching a careers-like
@@ -208,9 +210,13 @@ async def find_careers_page(website_url: str, *, timeout_seconds: float = DEFAUL
     origin = normalize_url(website_url)
     headers = {"User-Agent": USER_AGENT}
 
-    async with httpx.AsyncClient(timeout=timeout_seconds, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds, headers=headers, follow_redirects=True
+    ) as client:
         if not await _robots_allows(client, origin, USER_AGENT):
-            logger.info("robots.txt disallows the careers-page check", extra={"url": origin})
+            logger.info(
+                "robots.txt disallows the careers-page check", extra={"url": origin}
+            )
             return None
 
         try:
@@ -243,7 +249,9 @@ async def find_careers_page(website_url: str, *, timeout_seconds: float = DEFAUL
     return None
 
 
-async def check_careers_page(website_url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> CareersPageSnapshot:
+async def check_careers_page(
+    website_url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+) -> CareersPageSnapshot:
     """Fetch and fingerprint a lead's careers/jobs page, if one exists.
 
     Args:
@@ -262,11 +270,16 @@ async def check_careers_page(website_url: str, *, timeout_seconds: float = DEFAU
         return CareersPageSnapshot(found=False)
 
     headers = {"User-Agent": USER_AGENT}
-    async with httpx.AsyncClient(timeout=timeout_seconds, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout_seconds, headers=headers, follow_redirects=True
+    ) as client:
         try:
             response = await client.get(careers_url)
         except httpx.HTTPError as exc:
-            logger.warning("Careers page found but could not be fetched", extra={"url": careers_url})
+            logger.warning(
+                "Careers page found but could not be fetched",
+                extra={"url": careers_url},
+            )
             raise JobSignalError(f"Could not fetch {careers_url}: {exc}") from exc
 
     text = extract_visible_text(response.text)[:MAX_TEXT_EXCERPT_CHARS]

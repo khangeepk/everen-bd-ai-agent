@@ -161,7 +161,8 @@ def test_is_hard_opt_out_does_not_flag_a_soft_decline(text: str) -> None:
 
 def test_pricing_intent_always_yields_price_objection() -> None:
     """Every PRICING reply is a price objection -- that is what the intent means."""
-    assert classify_objection("how much does this cost?", ReplyIntent.PRICING) is ObjectionType.PRICE
+    result = classify_objection("how much does this cost?", ReplyIntent.PRICING)
+    assert result is ObjectionType.PRICE
 
 
 @pytest.mark.parametrize(
@@ -206,7 +207,9 @@ def test_generic_decline_yields_not_interested_yet(text: str) -> None:
     assert classify_objection(text, ReplyIntent.NOT_INTERESTED) is ObjectionType.NOT_INTERESTED_YET
 
 
-@pytest.mark.parametrize("intent", [ReplyIntent.BOOK_CALL, ReplyIntent.INTERESTED, ReplyIntent.UNCLEAR])
+@pytest.mark.parametrize(
+    "intent", [ReplyIntent.BOOK_CALL, ReplyIntent.INTERESTED, ReplyIntent.UNCLEAR]
+)
 def test_non_objection_intents_never_yield_an_objection_type(intent: ReplyIntent) -> None:
     """Only PRICING and NOT_INTERESTED can ever imply an objection to rebut."""
     assert classify_objection("anything at all", intent) is None

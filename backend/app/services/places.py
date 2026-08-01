@@ -555,8 +555,9 @@ class PlaceDiscoveryService:
         await self._db.flush()
 
         created = 0
+        ttl_days = settings.places_coordinate_ttl_days
         for result in results:
-            if await self._upsert_candidate(result, search, now, settings.places_coordinate_ttl_days):
+            if await self._upsert_candidate(result, search, now, ttl_days):
                 created += 1
 
         search.new_candidate_count = created

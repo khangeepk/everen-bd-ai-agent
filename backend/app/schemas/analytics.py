@@ -110,7 +110,10 @@ class CreatePromptVersionRequest(BaseModel):
 
     agent_name: str = Field(min_length=1, max_length=100)
     channel: str | None = Field(
-        default=None, description="e.g. 'email', 'whatsapp', 'call_script'. Null applies agent-wide."
+        default=None,
+        description=(
+            "e.g. 'email', 'whatsapp', 'call_script'. Null applies agent-wide."
+        ),
     )
     label: str = Field(min_length=1, max_length=100)
     prompt_text: str = Field(min_length=1)

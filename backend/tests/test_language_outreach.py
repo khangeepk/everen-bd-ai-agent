@@ -81,7 +81,7 @@ def test_resolve_draft_language_override_wins() -> None:
 
 @pytest.mark.asyncio
 async def test_agent_injects_language_note_into_system_prompt(db_session: AsyncSession) -> None:
-    """OutreachDraftAgent should append language instructions to the LLM system prompt for non-English leads."""
+    """Non-English leads get language instructions in the LLM system prompt."""
     lead = _make_lead(detected_language="es")
     db_session.add(lead)
     await db_session.flush()

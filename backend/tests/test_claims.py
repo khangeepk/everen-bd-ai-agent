@@ -5,8 +5,9 @@ Covers both Clerk-shaped and Auth.js-shaped token payloads.
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
 
 from app.core.claims import ClaimError, normalize_claims
 
