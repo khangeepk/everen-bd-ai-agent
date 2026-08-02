@@ -1,12 +1,13 @@
 import { Send, Sparkles } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 
 import { ChatResultsTable } from "@/components/dashboard/ChatResultsTable";
+import { ErrorState } from "@/components/common/ErrorState";
 import { PanelHeader } from "@/components/dashboard/PanelHeader";
 import { hasApiToken } from "@/lib/apiClient";
 import { LEADS_PAGE_SIZE, runLeadsQuery, runPlacesQuery, type ChatQueryOutcome } from "@/lib/chatQueries";
 import { parseChatQuery } from "@/lib/parseChatQuery";
-import type { ChatMessage, ParsedIntent } from "@/types/chat";
+import type { ChatMessage, ParsedIntent, RunnableIntent } from "@/types/chat";
 
 const EXAMPLE_PROMPTS: readonly string[] = [
   "find restaurants in Dallas with no website",
@@ -37,6 +38,29 @@ export function ChatPanel(): JSX.Element {
   const [inputValue, setInputValue] = useState("");
   const [isRunning, setIsRunning] = useState(false);
 
+  /** Run a runnable intent and append the assistant reply (used by submit + retry). */
+  const runIntent = useCallback(async (intent: RunnableIntent): Promise<void> => {
+    setIsRunning(true);
+    const outcome =
+      intent.kind === "leads_list" ? await runLeadsQuery(intent) : await runPlacesQuery(intent);
+
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: newMessageId("assistant"),
+        role: "assistant",
+        text: outcome.error
+          ? "That request didn't go through."
+          : describeOutcome(intent, outcome),
+        results: outcome.error ? undefined : outcome.results,
+        isMock: outcome.isMock,
+        error: outcome.error,
+        retryIntent: outcome.error ? intent : undefined,
+      },
+    ]);
+    setIsRunning(false);
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const text = inputValue.trim();
@@ -46,7 +70,6 @@ export function ChatPanel(): JSX.Element {
 
     setInputValue("");
     setMessages((previous) => [...previous, { id: newMessageId("user"), role: "user", text }]);
-    setIsRunning(true);
 
     const intent = parseChatQuery(text);
 
@@ -55,24 +78,10 @@ export function ChatPanel(): JSX.Element {
         ...previous,
         { id: newMessageId("assistant"), role: "assistant", text: intent.message },
       ]);
-      setIsRunning(false);
       return;
     }
 
-    const outcome =
-      intent.kind === "leads_list" ? await runLeadsQuery(intent) : await runPlacesQuery(intent);
-
-    setMessages((previous) => [
-      ...previous,
-      {
-        id: newMessageId("assistant"),
-        role: "assistant",
-        text: describeOutcome(intent, outcome),
-        results: outcome.results,
-        isMock: outcome.isMock,
-      },
-    ]);
-    setIsRunning(false);
+    await runIntent(intent);
   }
 
   return (
@@ -121,14 +130,33 @@ export function ChatPanel(): JSX.Element {
             <p>{message.text}</p>
             {message.isMock ? (
               <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-amber-600">
-                Showing sample results
+                Sample data — not a real query
               </p>
+            ) : null}
+            {message.error && message.retryIntent ? (
+              <div className="mt-2">
+                <ErrorState
+                  compact
+                  message={message.error}
+                  onRetry={() => {
+                    const retry = message.retryIntent;
+                    if (retry) {
+                      void runIntent(retry);
+                    }
+                  }}
+                />
+              </div>
             ) : null}
             {message.results ? <ChatResultsTable results={message.results} /> : null}
           </div>
         ))}
 
-        {isRunning ? <p className="text-xs text-slate-400">Working on it&hellip;</p> : null}
+        {isRunning ? (
+          <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-brand-navy" />
+            <span className="text-xs text-slate-400">Running your query&hellip;</span>
+          </div>
+        ) : null}
       </div>
 
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
@@ -164,9 +192,6 @@ function describeOutcome(
 
   if (intent.kind === "leads_list" && intent.minScorePercent !== undefined) {
     text += ` (Score checked across the most recent ${LEADS_PAGE_SIZE} leads matching your other filters -- not a full database scan.)`;
-  }
-  if (outcome.fallbackReason) {
-    text += ` Couldn't reach the real API (${outcome.fallbackReason}), so these are sample results.`;
   }
 
   return text;

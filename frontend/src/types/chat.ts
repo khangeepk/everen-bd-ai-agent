@@ -124,4 +124,11 @@ export interface ChatMessage {
    * call -- surfaced in the UI so a sample result is never mistaken for a
    * real one. See src/lib/chatQueries.ts. */
   isMock?: boolean;
+  /** Set when a real API call failed. Renders an error + retry, never samples. */
+  error?: string;
+  /** The intent to re-run when the user clicks retry on an errored message. */
+  retryIntent?: RunnableIntent;
 }
+
+/** A parsed intent that can actually be run against the API (not "unrecognized"). */
+export type RunnableIntent = Extract<ParsedIntent, { kind: "leads_list" | "places_search" }>;

@@ -31,9 +31,9 @@ export const LEADS_PAGE_SIZE = 50;
 export interface ChatQueryOutcome {
   results: ChatResults;
   isMock: boolean;
-  /** Set when a real call was attempted but failed -- shown alongside the
-   * mock fallback so the user knows *why* they're seeing sample data. */
-  fallbackReason?: string;
+  /** Set when a token IS configured but the real call failed. Callers must
+   * show an error + retry for this case -- NOT fall back to sample data. */
+  error?: string;
 }
 
 /**
@@ -82,7 +82,9 @@ export async function runLeadsQuery(
 
     return { results: { kind: "leads", rows }, isMock: false };
   } catch (error) {
-    return { results: mockLeadsResults(intent), isMock: true, fallbackReason: describeError(error) };
+    // Token was configured, so this was a real attempt that failed. Surface
+    // the error for an explicit retry -- never silently swap in sample data.
+    return { results: { kind: "leads", rows: [] }, isMock: false, error: describeError(error) };
   }
 }
 
@@ -147,11 +149,8 @@ export async function runPlacesQuery(
 
     return { results: { kind: "places", rows }, isMock: false };
   } catch (error) {
-    return {
-      results: mockPlacesResults(intent),
-      isMock: true,
-      fallbackReason: describeError(error),
-    };
+    // Real attempt failed -- surface the error for retry, no silent sample swap.
+    return { results: { kind: "places", rows: [] }, isMock: false, error: describeError(error) };
   }
 }
 
