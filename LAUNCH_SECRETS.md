@@ -66,7 +66,7 @@ work. Leave any as `not-set-yet` and that stage no-ops (safe, not a crash).
 | Env var | Where obtained | Notes |
 |---|---|---|
 | `SENDGRID_WEBHOOK_VERIFICATION_KEY` | **SendGrid → Settings → Mail Settings → Signed Event Webhook** (SendGrid generates it; free) | Empty = bounce webhook fail-closes (401 on everything). See test key below. |
-| `SENTRY_DSN` | sentry.io → new FastAPI project | Blank = error alerting disabled (inert) |
+| `SENTRY_DSN` **(recommended)** | sentry.io → new FastAPI project (free tier: 5k errors/mo) | Blank = error alerting disabled (inert, safe). **Recommended** so you find out about production errors — payloads are PII-scrubbed (emails/phones stripped via the `before_send` hook), `traces_sample_rate=0.1` keeps it in the free tier. |
 | `CORS_ORIGINS` | your deployed frontend origin(s) | Blank = localhost defaults; fine with no frontend |
 | `N8N_WEBHOOK_SECRET` | your choice (shared secret) | Only for the n8n pause webhook |
 | `GOOGLE_CALENDAR_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN` | Google Cloud OAuth | Only for meeting-booking module |

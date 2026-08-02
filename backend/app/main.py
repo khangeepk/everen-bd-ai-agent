@@ -36,6 +36,8 @@ def _configure_sentry() -> None:
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
 
+    from app.core.sentry_scrub import scrub_pii_from_event
+
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.app_env,
@@ -44,8 +46,15 @@ def _configure_sentry() -> None:
         # PII (contact_email/contact_phone, etc.) must never leave this
         # system via a third-party error-tracking payload -- see AGENTS.md
         # section 9's encryption-at-rest rationale, which this preserves in
-        # spirit for anything crossing a network boundary too.
+        # spirit for anything crossing a network boundary too. Three layers:
+        #   1. send_default_pii=False   -> no auto request/user/cookie capture
+        #   2. include_local_variables=False -> don't capture stack-frame locals
+        #      (a frame could hold contact_email="..." etc.)
+        #   3. before_send scrubber     -> redact any email/phone still present
+        #      in exception messages, extra context, or breadcrumbs.
         send_default_pii=False,
+        include_local_variables=False,
+        before_send=scrub_pii_from_event,
     )
     logger.info("Sentry error alerting enabled", extra={"app_env": settings.app_env})
 
