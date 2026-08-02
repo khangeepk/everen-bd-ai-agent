@@ -33,16 +33,41 @@ export const funnelColumns: FunnelColumn[] = [
     id: "prospecting",
     title: "Prospecting",
     deals: [
-      { id: "d1", accountName: "Zenith Corp", dealValueLabel: "$4.15M" },
-      { id: "d2", accountName: "Global Tech", dealValueLabel: "$4.15M" },
+      {
+        id: "d1",
+        accountName: "Zenith Corp",
+        dealValueLabel: "$4.15M",
+        score: 0.82,
+        scoreReasons: ["old website", "no mobile version", "contact email found"],
+      },
+      {
+        id: "d2",
+        accountName: "Global Tech",
+        dealValueLabel: "$4.15M",
+        score: 0.61,
+        scoreReasons: ["slow site", "weak social presence"],
+      },
     ],
   },
   {
     id: "qualification",
     title: "Qualification",
     deals: [
-      { id: "d3", accountName: "Acme Solutions", dealValueLabel: "$12,500" },
-      { id: "d4", accountName: "Acme Solutions", dealValueLabel: "$12,500" },
+      {
+        id: "d3",
+        accountName: "Acme Solutions",
+        dealValueLabel: "$12,500",
+        score: 0.34,
+        scoreReasons: ["modern site", "no email found"],
+      },
+      {
+        id: "d4",
+        accountName: "Riverside Dental",
+        dealValueLabel: "$12,500",
+        score: 0.9,
+        scoreReasons: ["no website"],
+        complianceState: "unsubscribed",
+      },
     ],
   },
   {

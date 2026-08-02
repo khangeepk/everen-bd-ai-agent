@@ -26,6 +26,18 @@ export interface DealCard {
   id: string;
   accountName: string;
   dealValueLabel: string;
+  /** Raw 0–1 lead score; rendered as a Hot/Warm/Cold label, never a number. */
+  score?: number;
+  /** Rep-friendly reason fragments behind the score, e.g. ["old website"]. */
+  scoreReasons?: readonly string[];
+  /** Compliance block, if any — rendered as a plain sentence, not a raw flag. */
+  complianceState?:
+    | "unsubscribed"
+    | "hard_bounce"
+    | "spam_complaint"
+    | "manual"
+    | "do_not_contact"
+    | "gdpr_deleted";
 }
 
 /** One stage/column of the Kanban deal funnel. */

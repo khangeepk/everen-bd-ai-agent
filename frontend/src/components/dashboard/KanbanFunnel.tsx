@@ -1,11 +1,25 @@
 import { Filter } from "lucide-react";
 
+import { ComplianceNotice } from "@/components/common/ComplianceNotice";
+import { LeadScoreBadge } from "@/components/common/LeadScoreBadge";
+import { StageChip } from "@/components/common/StageChip";
 import { PanelHeader } from "@/components/dashboard/PanelHeader";
+import type { PipelineStage } from "@/lib/plainLanguage";
 import type { FunnelColumn } from "@/types/dashboard";
 
 interface KanbanFunnelProps {
   columns: FunnelColumn[];
 }
+
+/** Column id -> backend pipeline stage, so each column header gets a tooltip. */
+const COLUMN_STAGE: Record<string, PipelineStage> = {
+  prospecting: "new",
+  qualification: "contacted",
+  proposal: "interested",
+  negotiation: "hot",
+  won: "converted",
+  lost: "lost",
+};
 
 /**
  * Deal-stage Kanban board. Read-only in this phase (no drag/drop wired up
@@ -19,10 +33,14 @@ export function KanbanFunnel({ columns }: KanbanFunnelProps): JSX.Element {
 
       <div className="grid grid-cols-2 gap-3 overflow-x-auto sm:grid-cols-3 lg:grid-cols-6">
         {columns.map((column) => (
-          <div key={column.id} className="min-w-[140px] rounded-lg bg-slate-50 p-2">
-            <p className="mb-2 truncate text-xs font-semibold text-slate-600" title={column.title}>
-              {column.title}
-            </p>
+          <div key={column.id} className="min-w-[150px] rounded-lg bg-slate-50 p-2">
+            <div className="mb-2">
+              {COLUMN_STAGE[column.id] ? (
+                <StageChip stage={COLUMN_STAGE[column.id] as PipelineStage} />
+              ) : (
+                <p className="truncate text-xs font-semibold text-slate-600">{column.title}</p>
+              )}
+            </div>
             <div className="flex flex-col gap-2">
               {column.deals.map((deal) => (
                 <div
@@ -32,9 +50,23 @@ export function KanbanFunnel({ columns }: KanbanFunnelProps): JSX.Element {
                   <p className="truncate font-medium text-slate-800" title={deal.accountName}>
                     {deal.accountName}
                   </p>
-                  <p className="mt-0.5 text-slate-500">
+                  {deal.score !== undefined ? (
+                    <div className="mt-1">
+                      <LeadScoreBadge
+                        score={deal.score}
+                        reasons={deal.scoreReasons ?? []}
+                        doNotContact={deal.complianceState !== undefined}
+                      />
+                    </div>
+                  ) : null}
+                  <p className="mt-1 text-slate-500">
                     Deal value <span className="font-semibold text-slate-700">{deal.dealValueLabel}</span>
                   </p>
+                  {deal.complianceState ? (
+                    <div className="mt-1.5">
+                      <ComplianceNotice state={deal.complianceState} />
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {column.deals.length === 0 ? (
