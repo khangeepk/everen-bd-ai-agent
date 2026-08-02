@@ -17,14 +17,14 @@
 
 databases:
   - name: everen-db
-    plan: basic-256mb # cheapest plan that includes daily automated backups
+    plan: free # free tier (no card required); expires ~30 days, 1GB. Upgrade to basic-256mb for daily backups when going live.
     postgresMajorVersion: "16"
     ipAllowList: [] # private network only; no public internet access to the DB
 
 services:
   - type: redis
     name: everen-redis
-    plan: starter
+    plan: free
     ipAllowList: []
     maxmemoryPolicy: allkeys-lru
 
@@ -33,15 +33,13 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    plan: free # free tier (no card required); web sleeps after ~15 min idle, cold-starts on next request. Upgrade to starter for always-on.
     region: oregon
     healthCheckPath: /health
-    # Run DB migrations before each deploy goes live. Without this, a fresh
-    # deploy starts gunicorn against an empty schema and every data endpoint
-    # 500s (and /health/ready's DB probe fails). preDeployCommand runs in the
-    # built image, whose WORKDIR is /app and which contains alembic.ini +
-    # alembic/, so `alembic upgrade head` resolves correctly.
-    preDeployCommand: alembic upgrade head
+    # NOTE: migrations run at container startup (see backend/Dockerfile CMD),
+    # not via preDeployCommand, because preDeployCommand needs a paid instance
+    # type. On startup the container runs `alembic upgrade head` before gunicorn,
+    # so the schema exists on both free and paid tiers.
     autoDeploy: false # deploys are triggered explicitly by CI/CD (see ci-cd.yml) after tests pass, not on every push
     envVars:
       - key: APP_ENV

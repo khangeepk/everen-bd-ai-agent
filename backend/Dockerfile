@@ -63,11 +63,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
 # low-QPS internal BD tool, not a high-throughput public API, and Render's
 # cheapest instances are 0.5-1 vCPU, so a CPU-count formula would either
 # under- or over-provision depending on plan.
-CMD ["gunicorn", "app.main:app", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "2", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "60", \
-     "--graceful-timeout", "30", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+# Run DB migrations, then hand off (exec) to gunicorn so it becomes PID 1 and
+# receives signals correctly. Migrating at startup keeps the schema in sync on
+# every tier, including Render's free plan (which does not run preDeployCommand).
+# The container is single-instance, so `alembic upgrade head` runs once before
+# any worker serves traffic.
+CMD ["sh", "-c", "alembic upgrade head && exec gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:8000 --timeout 60 --graceful-timeout 30 --access-logfile - --error-logfile -"]
