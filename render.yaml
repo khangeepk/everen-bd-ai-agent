@@ -36,6 +36,12 @@ services:
     plan: starter
     region: oregon
     healthCheckPath: /health
+    # Run DB migrations before each deploy goes live. Without this, a fresh
+    # deploy starts gunicorn against an empty schema and every data endpoint
+    # 500s (and /health/ready's DB probe fails). preDeployCommand runs in the
+    # built image, whose WORKDIR is /app and which contains alembic.ini +
+    # alembic/, so `alembic upgrade head` resolves correctly.
+    preDeployCommand: alembic upgrade head
     autoDeploy: false # deploys are triggered explicitly by CI/CD (see ci-cd.yml) after tests pass, not on every push
     envVars:
       - key: APP_ENV
