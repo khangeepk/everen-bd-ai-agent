@@ -1,7 +1,8 @@
-import { Linkedin, RefreshCw } from "lucide-react";
+import { Inbox, Linkedin, RefreshCw } from "lucide-react";
 import Head from "next/head";
 import { useEffect, useState } from "react";
 
+import { EmptyState } from "@/components/common/EmptyState";
 import { AppShell } from "@/components/layout/AppShell";
 import { LinkedInDraftCard } from "@/components/outreach/LinkedInDraftCard";
 import { fetchLinkedInQueue, type LinkedInQueueOutcome } from "@/lib/outreachQueueApi";
@@ -79,9 +80,12 @@ export default function OutreachQueuePage(): JSX.Element {
       {isLoading && !outcome ? (
         <p className="text-sm text-slate-400">Loading queue&hellip;</p>
       ) : outcome && outcome.items.length === 0 ? (
-        <p className="text-sm text-slate-400">
-          No LinkedIn drafts are waiting for review right now.
-        </p>
+        <EmptyState
+          icon={Inbox}
+          title="No drafts waiting yet"
+          guidance="When the agent finds a good-fit lead, its LinkedIn draft shows up here for you to review and copy. Start by finding leads to fill this queue."
+          cta={{ label: "Find leads", href: "/" }}
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {outcome?.items.map((item) => <LinkedInDraftCard key={item.draftId} item={item} />)}

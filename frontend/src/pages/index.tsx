@@ -6,6 +6,7 @@ import { ChatPanel } from "@/components/dashboard/ChatPanel";
 import { FollowUpTracker } from "@/components/dashboard/FollowUpTracker";
 import { KanbanFunnel } from "@/components/dashboard/KanbanFunnel";
 import { KpiCardRow } from "@/components/dashboard/KpiCardRow";
+import { NextActionBanner } from "@/components/dashboard/NextActionBanner";
 import { PartnerOutreachPanel } from "@/components/dashboard/PartnerOutreachPanel";
 import { WorkflowNodeBuilder } from "@/components/dashboard/WorkflowNodeBuilder";
 import {
@@ -20,6 +21,19 @@ import {
   workflowCanvasNodes,
   workflowLibrary,
 } from "@/lib/mockDashboardData";
+import type { PendingWorkCounts } from "@/types/onboarding";
+
+/**
+ * Pending-work counts that drive the "What should I do now?" banner. Derived
+ * from the mock dashboard data for now; swap for a real summary API call when
+ * the backend endpoint is wired.
+ */
+const pendingWork: PendingWorkCounts = {
+  draftsAwaitingApproval: 12,
+  hotLeadsToReview: funnelColumns[0]?.deals.length ?? 0,
+  repliesToClassify: 0,
+  followUpsDue: followUpRows.length,
+};
 
 /**
  * B2B Deal Flow dashboard -- the main landing page.
@@ -44,6 +58,8 @@ export default function DashboardPage(): JSX.Element {
       </div>
 
       <div className="flex flex-col gap-4">
+        <NextActionBanner counts={pendingWork} />
+
         <KpiCardRow metrics={kpiMetrics} />
 
         <ChatPanel />
