@@ -35,6 +35,12 @@ from app.schemas.analytics import (
     VariantPerformanceResponse,
     LanguagePerformanceResponse,
 )
+from app.schemas.dashboard import (
+    DashboardSummaryResponse,
+    KanbanColumnResponse,
+    KanbanDealResponse,
+    KpiMetricResponse,
+)
 from app.services.analytics import (
     get_campaign_performance,
     get_overview,
@@ -45,6 +51,7 @@ from app.services.analytics import (
 )
 from app.services.cost_guard import CostProvider
 from app.services.cost_tracking import get_budget_status
+from app.services.dashboard_summary import get_dashboard_summary
 from app.services.outreach_policy import OutreachChannel
 
 logger = logging.getLogger(__name__)
@@ -426,6 +433,67 @@ async def get_cost_status(
         )
 
     return CostStatusResponse(providers=[_to_response(places_status), _to_response(openai_status)])
+
+
+@router.get(
+    "/dashboard-summary",
+    response_model=DashboardSummaryResponse,
+    summary="Real-data summary for the B2B Deal Flow dashboard",
+    description=(
+        "KPI cards, Kanban columns, and the counts behind the dashboard's "
+        "next-action banner (pending approvals, hot leads, unclassified "
+        "replies, due follow-ups) -- all computed from real rows, no mock "
+        "or placeholder data. See app/services/dashboard_summary.py."
+    ),
+)
+async def dashboard_summary(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DashboardSummaryResponse:
+    """Fetch the full dashboard summary.
+
+    Args:
+        db: Active database session.
+        user: The authenticated caller.
+
+    Returns:
+        KPI metrics, Kanban columns, and next-action banner counts.
+    """
+    summary = await get_dashboard_summary(db)
+    return DashboardSummaryResponse(
+        kpis=[
+            KpiMetricResponse(
+                id=k.metric_id,
+                label=k.label,
+                value=k.value,
+                change_label=k.change_label,
+                trend=k.trend,
+            )
+            for k in summary.kpis
+        ],
+        kanban_columns=[
+            KanbanColumnResponse(
+                id=col.column_id,
+                title=col.title,
+                deals=[
+                    KanbanDealResponse(
+                        id=d.id,
+                        account_name=d.account_name,
+                        deal_value_label=d.deal_value_label,
+                        score=d.score,
+                        score_reasons=list(d.score_reasons),
+                        compliance_state=d.compliance_state,
+                    )
+                    for d in col.deals
+                ],
+            )
+            for col in summary.kanban_columns
+        ],
+        drafts_awaiting_approval=summary.drafts_awaiting_approval,
+        hot_leads_to_review=summary.hot_leads_to_review,
+        replies_to_classify=summary.replies_to_classify,
+        follow_ups_due=summary.follow_ups_due,
+    )
 
 
 @router.get(

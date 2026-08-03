@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import logging
 import random
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
@@ -37,6 +38,7 @@ from sqlalchemy import delete, select
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.models.audit import AuditFinding, AuditStatus, WebsiteAudit
+from app.db.models.knowledge_base import Service
 from app.db.models.lead import Lead, LeadSource, LeadStatus
 from app.db.models.lead_score import LeadScore
 from app.db.models.outreach import DraftStatus, OutreachDraft
@@ -146,7 +148,7 @@ def _make_score_breakdown(*, tier: str) -> ScoreBreakdown:
     )
 
 
-async def _seed_lead(db, i: int, dev_user: User) -> Lead:
+async def _seed_lead(db, i: int, dev_user: User) -> tuple[Lead, uuid.UUID | None]:
     """Create one demo lead with a realistic pipeline position.
 
     Args:
@@ -155,7 +157,10 @@ async def _seed_lead(db, i: int, dev_user: User) -> Lead:
         dev_user: Attributed as the actor for pipeline events.
 
     Returns:
-        The persisted Lead.
+        The persisted Lead, and the id of its WebsiteAudit if one was
+        created (None for the roughly two-thirds of leads that don't get
+        one) -- the caller threads this into each draft's source_audit_id
+        so the real approval-queue provenance join has something to find.
     """
     city, state = _CITIES[i % len(_CITIES)]
     category = _CATEGORIES[i % len(_CATEGORIES)]
@@ -251,6 +256,7 @@ async def _seed_lead(db, i: int, dev_user: User) -> Lead:
     # Audit + findings for about a third of leads -- enough to populate audit
     # views without every single lead having one (matches real usage, where
     # audits are triggered selectively, not automatically for every lead).
+    audit_id: uuid.UUID | None = None
     if i % 3 == 0:
         completed_at = datetime.now(timezone.utc) - timedelta(days=_rng.randint(1, 20))
         started_at = completed_at - timedelta(minutes=_rng.randint(5, 90))
@@ -277,6 +283,7 @@ async def _seed_lead(db, i: int, dev_user: User) -> Lead:
         )
         db.add(audit)
         await db.flush()
+        audit_id = audit.id
 
         _FINDINGS = [
             (
@@ -325,7 +332,7 @@ async def _seed_lead(db, i: int, dev_user: User) -> Lead:
                 )
             )
 
-    return lead
+    return lead, audit_id
 
 
 def _fallback_email_body(lead: Lead) -> tuple[str, str]:
@@ -350,7 +357,14 @@ def _fallback_email_body(lead: Lead) -> tuple[str, str]:
     return subject, body
 
 
-async def _seed_drafts_for_lead(db, lead: Lead, dev_user: User, i: int) -> None:
+async def _seed_drafts_for_lead(
+    db,
+    lead: Lead,
+    dev_user: User,
+    i: int,
+    audit_id: uuid.UUID | None,
+    service_id: uuid.UUID | None,
+) -> None:
     """Create 0-2 outreach drafts in varied statuses for one lead.
 
     Args:
@@ -358,6 +372,15 @@ async def _seed_drafts_for_lead(db, lead: Lead, dev_user: User, i: int) -> None:
         lead: The lead the draft(s) target.
         dev_user: Attributed as approver for approved/sent drafts.
         i: Batch index, used to vary channel/status.
+        audit_id: This lead's WebsiteAudit id, if one was seeded -- set as
+            the draft's source_audit_id so the real approval-queue
+            provenance join (GET /outreach/queue/enriched) has real
+            findings to surface, not an empty "why it says this" section.
+        service_id: A real seeded Service id, if the Knowledge Base has been
+            seeded (app/db/seed.py) -- set as source_service_id so
+            "recommended service" is a real row, not invented text. None
+            when the KB hasn't been seeded, which the enriched endpoint
+            handles honestly (omits the recommendation rather than faking one).
     """
     if lead.status == LeadStatus.NEW and i % 4 != 0:
         return  # Most brand-new leads have no drafts yet -- realistic.
@@ -396,6 +419,8 @@ async def _seed_drafts_for_lead(db, lead: Lead, dev_user: User, i: int) -> None:
         campaign_type=CampaignType.COLD,
         created_by_agent="demo_seed",
         used_fallback=True,
+        source_audit_id=audit_id,
+        source_service_id=service_id,
         approved_by_id=dev_user.id if approved else None,
         approved_at=now - timedelta(days=1) if approved else None,
         rejected_reason="Not a great fit for this quarter's focus." if draft_status == DraftStatus.REJECTED else None,
@@ -426,6 +451,8 @@ async def _seed_drafts_for_lead(db, lead: Lead, dev_user: User, i: int) -> None:
                 campaign_type=CampaignType.COLD,
                 created_by_agent="demo_seed",
                 used_fallback=True,
+                source_audit_id=audit_id,
+                source_service_id=service_id,
             )
         )
 
@@ -481,13 +508,24 @@ async def seed_demo_data(*, count: int = 40, reset: bool = False) -> None:
 
         dev_user = await _get_or_create_dev_user(db)
 
-        leads: list[Lead] = []
-        for i in range(count):
-            lead = await _seed_lead(db, i, dev_user)
-            leads.append(lead)
+        # Best-effort: if the Knowledge Base (app/db/seed.py) has been
+        # seeded, attribute drafts to a real Service row so "recommended
+        # service" in the approval queue is genuine. None if it hasn't --
+        # the enriched queue endpoint handles that by omitting the
+        # recommendation rather than inventing one.
+        demo_service_id = (
+            await db.execute(select(Service.id).limit(1))
+        ).scalar_one_or_none()
 
-        for i, lead in enumerate(leads):
-            await _seed_drafts_for_lead(db, lead, dev_user, i)
+        leads: list[Lead] = []
+        audit_ids: list[uuid.UUID | None] = []
+        for i in range(count):
+            lead, audit_id = await _seed_lead(db, i, dev_user)
+            leads.append(lead)
+            audit_ids.append(audit_id)
+
+        for i, (lead, audit_id) in enumerate(zip(leads, audit_ids)):
+            await _seed_drafts_for_lead(db, lead, dev_user, i, audit_id, demo_service_id)
 
         await db.commit()
         logger.info("Demo data seeded", extra={"leads": len(leads)})

@@ -1,7 +1,9 @@
 import { Building2 } from "lucide-react";
 import Head from "next/head";
+import { useCallback, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/AppShell";
+import { ErrorState } from "@/components/common/ErrorState";
 import { ChatPanel } from "@/components/dashboard/ChatPanel";
 import { FollowUpTracker } from "@/components/dashboard/FollowUpTracker";
 import { KanbanFunnel } from "@/components/dashboard/KanbanFunnel";
@@ -9,10 +11,9 @@ import { KpiCardRow } from "@/components/dashboard/KpiCardRow";
 import { NextActionBanner } from "@/components/dashboard/NextActionBanner";
 import { PartnerOutreachPanel } from "@/components/dashboard/PartnerOutreachPanel";
 import { WorkflowNodeBuilder } from "@/components/dashboard/WorkflowNodeBuilder";
+import { fetchDashboardSummary, type DashboardSummaryOutcome } from "@/lib/dashboardApi";
 import {
   followUpRows,
-  funnelColumns,
-  kpiMetrics,
   outreachVolume,
   partnerLocations,
   recentWorkflows,
@@ -21,31 +22,35 @@ import {
   workflowCanvasNodes,
   workflowLibrary,
 } from "@/lib/mockDashboardData";
-import type { PendingWorkCounts } from "@/types/onboarding";
-
-/**
- * Pending-work counts that drive the "What should I do now?" banner. Derived
- * from the mock dashboard data for now; swap for a real summary API call when
- * the backend endpoint is wired.
- */
-const pendingWork: PendingWorkCounts = {
-  draftsAwaitingApproval: 12,
-  hotLeadsToReview: funnelColumns[0]?.deals.length ?? 0,
-  repliesToClassify: 0,
-  followUpsDue: followUpRows.length,
-};
 
 /**
  * B2B Deal Flow dashboard -- the main landing page.
  *
- * Renders mock data only (see src/lib/mockDashboardData.ts); this phase is a
- * design/layout pass, confirmed with the user before building. A default
- * export is required here because this is a Next.js page file (framework
- * requirement, the one sanctioned exception to AGENTS.md section 4.1's
- * named-exports rule -- see also src/pages/_app.tsx).
+ * KPI cards, the Kanban funnel, and the "what should I do now?" banner are
+ * wired to the real GET /analytics/dashboard-summary (see
+ * lib/dashboardApi.ts) when a dev session is available -- status counts,
+ * pipeline stage groupings, and next-action counts all reflect real seeded
+ * data, not the mock dataset. The follow-up tracker, partner-outreach
+ * panel, and workflow builder below remain mock/design-pass data (see
+ * lib/mockDashboardData.ts) -- they weren't part of this wiring pass.
+ * A default export is required here (Next.js page file).
  */
 // eslint-disable-next-line import/no-default-export -- Next.js requires a default export here.
 export default function DashboardPage(): JSX.Element {
+  const [summary, setSummary] = useState<DashboardSummaryOutcome | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const load = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    const result = await fetchDashboardSummary();
+    setSummary(result);
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   return (
     <AppShell>
       <Head>
@@ -58,14 +63,28 @@ export default function DashboardPage(): JSX.Element {
       </div>
 
       <div className="flex flex-col gap-4">
-        <NextActionBanner counts={pendingWork} />
+        {summary?.isMock ? (
+          <div className="rounded-md bg-amber-50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-amber-700">
+            Sample data below -- not real query. No local dev session available (is the backend
+            running at NEXT_PUBLIC_API_BASE_URL?).
+          </div>
+        ) : null}
 
-        <KpiCardRow metrics={kpiMetrics} />
+        {isLoading && !summary ? (
+          <p className="text-sm text-slate-400">Loading dashboard&hellip;</p>
+        ) : summary?.error ? (
+          <ErrorState message={summary.error} onRetry={() => void load()} />
+        ) : summary ? (
+          <>
+            <NextActionBanner counts={summary.pendingWork} />
+            <KpiCardRow metrics={summary.kpis} />
+          </>
+        ) : null}
 
         <ChatPanel />
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <KanbanFunnel columns={funnelColumns} />
+          {summary && !summary.error ? <KanbanFunnel columns={summary.kanbanColumns} /> : null}
           <PartnerOutreachPanel
             volume={outreachVolume}
             responseRate={responseRateSlices}

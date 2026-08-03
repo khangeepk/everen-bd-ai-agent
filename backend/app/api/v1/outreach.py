@@ -38,6 +38,8 @@ from app.api.deps import (
 from app.core.config import settings
 from app.db.base import utcnow
 from app.db.models.analytics import EmailOpenEvent
+from app.db.models.audit import AuditFinding
+from app.db.models.knowledge_base import Service
 from app.db.models.lead import Lead
 from app.db.models.outreach import (
     EDITABLE_STATUSES,
@@ -55,12 +57,17 @@ from app.schemas.outreach import (
     AuditLogEntryResponse,
     BounceWebhookEvent,
     BounceWebhookResponse,
+    DetectedProblemResponse,
+    DraftClaimResponse,
     DraftResponse,
+    EnrichedDraftResponse,
+    EnrichedLeadSummary,
     FollowUpScanResponse,
     FollowUpSkipResponse,
     GenerateDraftsRequest,
     GenerateDraftsResponse,
     PaginatedDrafts,
+    PaginatedEnrichedDrafts,
     QuotaStatusResponse,
     RejectDraftRequest,
     SendResultResponse,
@@ -69,6 +76,7 @@ from app.schemas.outreach import (
     UpdateDraftRequest,
 )
 from app.services.campaign_followup_scanner import scan_due_follow_ups
+from app.services.dashboard_summary import compliance_state_for_lead, latest_scores_by_lead
 from app.services.canspam import (
     CanSpamViolationError,
     validate_sendable_email,
@@ -358,6 +366,159 @@ async def list_queue(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get(
+    "/queue/enriched",
+    response_model=PaginatedEnrichedDrafts,
+    summary="List the approval queue with full review context",
+    description=(
+        "Same filtering/paging as GET /outreach/queue, but each draft is joined "
+        "with its lead, latest score, the audit findings it's grounded in "
+        "(via source_audit_id), and its recommended service (via "
+        "source_service_id) -- everything the approval-review screen needs "
+        "in one call. A draft with no source_audit_id simply has an empty "
+        "problems/claims list; nothing here is invented."
+    ),
+)
+async def list_queue_enriched(
+    status_filter: DraftStatus = Query(default=DraftStatus.PENDING_REVIEW, alias="status"),
+    channel: OutreachChannel | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> PaginatedEnrichedDrafts:
+    """List drafts in the approval queue, enriched with review context.
+
+    Args:
+        status_filter: Which status to list. Defaults to pending_review.
+        channel: Optional channel filter.
+        page: 1-indexed page number.
+        page_size: Rows per page, capped at 100.
+        db: Active database session.
+        user: The authenticated caller.
+
+    Returns:
+        A page of enriched drafts.
+    """
+    filters = [OutreachDraft.status == status_filter]
+    if channel is not None:
+        filters.append(OutreachDraft.channel == channel)
+
+    total = (
+        await db.execute(select(func.count()).select_from(OutreachDraft).where(*filters))
+    ).scalar_one()
+
+    drafts = (
+        (
+            await db.execute(
+                select(OutreachDraft)
+                .where(*filters)
+                .order_by(OutreachDraft.created_at.asc())
+                .limit(page_size)
+                .offset((page - 1) * page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    lead_ids = list({d.lead_id for d in drafts})
+    leads_by_id: dict[uuid.UUID, Lead] = {}
+    if lead_ids:
+        leads_by_id = {
+            lead.id: lead
+            for lead in (
+                (await db.execute(select(Lead).where(Lead.id.in_(lead_ids)))).scalars().all()
+            )
+        }
+    scores_by_lead = await latest_scores_by_lead(db, lead_ids)
+
+    audit_ids = list({d.source_audit_id for d in drafts if d.source_audit_id is not None})
+    findings_by_audit: dict[uuid.UUID, list[AuditFinding]] = {}
+    if audit_ids:
+        findings = (
+            (
+                await db.execute(
+                    select(AuditFinding).where(AuditFinding.audit_id.in_(audit_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for finding in findings:
+            findings_by_audit.setdefault(finding.audit_id, []).append(finding)
+
+    service_ids = list({d.source_service_id for d in drafts if d.source_service_id is not None})
+    service_names_by_id: dict[uuid.UUID, str] = {}
+    if service_ids:
+        service_names_by_id = {
+            row.id: row.name
+            for row in (
+                (await db.execute(select(Service).where(Service.id.in_(service_ids))))
+                .scalars()
+                .all()
+            )
+        }
+
+    items: list[EnrichedDraftResponse] = []
+    for draft in drafts:
+        lead = leads_by_id.get(draft.lead_id)
+        score_row = scores_by_lead.get(draft.lead_id)
+        findings = findings_by_audit.get(draft.source_audit_id, []) if draft.source_audit_id else []
+
+        items.append(
+            EnrichedDraftResponse(
+                id=draft.id,
+                lead=EnrichedLeadSummary(
+                    id=lead.id if lead else draft.lead_id,
+                    name=lead.name if lead else "(lead unavailable)",
+                    industry=lead.category if lead else None,
+                    # Lead has no city/state field, only country -- this is
+                    # the real granularity available, not a placeholder.
+                    location=lead.country if lead else None,
+                ),
+                channel=draft.channel,
+                status=draft.status,
+                subject=draft.subject,
+                body=draft.body,
+                linkedin_followup_message=draft.linkedin_followup_message,
+                review_warnings=draft.review_warnings,
+                created_at=draft.created_at,
+                score=score_row.total_score if score_row else None,
+                score_reasons=(
+                    [
+                        r
+                        for r in (
+                            (score_row.need_reasons or "").split("\n")
+                            + (score_row.fit_reasons or "").split("\n")
+                        )
+                        if r
+                    ][:3]
+                    if score_row
+                    else []
+                ),
+                compliance_state=compliance_state_for_lead(lead) if lead else None,
+                problems=[
+                    DetectedProblemResponse(
+                        category=f.category, title=f.title, detail=f.detail
+                    )
+                    for f in findings
+                ],
+                claims=[
+                    DraftClaimResponse(phrase=f.title, source=f.category, evidence=f.evidence)
+                    for f in findings
+                ],
+                recommended_service=(
+                    service_names_by_id.get(draft.source_service_id)
+                    if draft.source_service_id
+                    else None
+                ),
+            )
+        )
+
+    return PaginatedEnrichedDrafts(items=items, total=int(total), page=page, page_size=page_size)
 
 
 @router.get(

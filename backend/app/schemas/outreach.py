@@ -8,6 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.outreach import DraftStatus, SuppressionReason
+from app.services.audit_scoring import FindingCategory
 from app.services.outreach_policy import CampaignType, OutreachChannel
 from app.services.reply_classification import ObjectionType
 from app.services.send_limits import BounceType
@@ -263,6 +264,75 @@ class FollowUpSkipResponse(BaseModel):
     lead_id: uuid.UUID
     channel: OutreachChannel
     reason: str
+
+
+class DetectedProblemResponse(BaseModel):
+    """One audit finding shown as a detected problem in the context column."""
+
+    category: FindingCategory
+    title: str
+    detail: str | None
+
+
+class DraftClaimResponse(BaseModel):
+    """One personalized claim in the draft, tied back to the finding it's
+    grounded in -- the approval queue's "why it says this" provenance."""
+
+    phrase: str
+    source: FindingCategory
+    evidence: str | None
+
+
+class EnrichedLeadSummary(BaseModel):
+    """Minimal lead context shown alongside a draft in the approval queue."""
+
+    id: uuid.UUID
+    name: str
+    industry: str | None
+    location: str | None
+
+
+class EnrichedDraftResponse(BaseModel):
+    """A draft joined with its lead, score, audit findings, and recommended
+    service -- everything the approval-review screen needs in one call, with
+    no frontend N+1 and no invented data. See GET /outreach/queue/enriched.
+    """
+
+    id: uuid.UUID
+    lead: EnrichedLeadSummary
+    channel: OutreachChannel
+    status: DraftStatus
+    subject: str | None
+    body: str
+    linkedin_followup_message: str | None
+    review_warnings: str | None
+    created_at: datetime
+
+    #: None if this lead has never been scored.
+    score: float | None
+    score_reasons: list[str]
+    #: None if the lead is not blocked from contact.
+    compliance_state: str | None
+
+    #: From the draft's source_audit_id, if set. Empty list if the draft
+    #: isn't grounded in an audit (e.g. hand-created, or the audit was never
+    #: linked) -- never fabricated findings.
+    problems: list[DetectedProblemResponse]
+    claims: list[DraftClaimResponse]
+
+    #: Name of the service named by the draft's source_service_id, if set
+    #: and if that Service row still exists. None otherwise -- the frontend
+    #: shows "not yet matched" rather than a fake recommendation.
+    recommended_service: str | None
+
+
+class PaginatedEnrichedDrafts(BaseModel):
+    """A page of enriched approval-queue drafts."""
+
+    items: list[EnrichedDraftResponse]
+    total: int
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=100)
 
 
 class FollowUpScanResponse(BaseModel):

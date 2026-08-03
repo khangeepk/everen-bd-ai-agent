@@ -20,6 +20,15 @@ import type { ApprovalDraft, ReviewDecision, SendQuota } from "@/types/approval"
 interface ApprovalReviewScreenProps {
   drafts: readonly ApprovalDraft[];
   quota: SendQuota;
+  /** Called when a draft is approved. Wired to the real, gated
+   * POST /outreach/drafts/{id}/approve when the queue is live (see
+   * pages/approvals.tsx) -- omitted entirely in mock-data mode, where
+   * approval is local-state only and nothing exists server-side to call. */
+  onApprove?: (id: string) => void;
+  /** Called when a draft is rejected, with the reason the reviewer gave. */
+  onReject?: (id: string, reason: string) => void;
+  /** Called with every selected draft id when a bulk approval is confirmed. */
+  onBulkApprove?: (ids: string[]) => void;
 }
 
 const SHORTCUTS: readonly { keys: string; label: string }[] = [
@@ -39,11 +48,20 @@ const SHORTCUTS: readonly { keys: string; label: string }[] = [
  * shows a confirmation summary before anything sends, and the daily send quota
  * is shown right here. Named export per AGENTS.md section 4.1.
  *
- * Interactions are local state only in this phase — wiring approve/reject to
- * the real gated endpoints (POST /outreach/drafts/{id}/approve) is a later
- * pass; the human-approval gate itself lives server-side (AGENTS.md section 8).
+ * Decisions update local UI state immediately (so the reviewer isn't blocked
+ * on a round trip) and, when the queue is backed by real data, also call
+ * the real gated endpoints via onApprove/onReject/onBulkApprove props (see
+ * pages/approvals.tsx) -- approving here never sends anything itself, it
+ * only marks a draft sendable; the human-approval gate lives server-side
+ * (AGENTS.md section 8).
  */
-export function ApprovalReviewScreen({ drafts, quota }: ApprovalReviewScreenProps): JSX.Element {
+export function ApprovalReviewScreen({
+  drafts,
+  quota,
+  onApprove,
+  onReject,
+  onBulkApprove,
+}: ApprovalReviewScreenProps): JSX.Element {
   const [index, setIndex] = useState<number>(0);
   const [decisions, setDecisions] = useState<Record<string, ReviewDecision>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -58,8 +76,22 @@ export function ApprovalReviewScreen({ drafts, quota }: ApprovalReviewScreenProp
       setDecisions((d) => ({ ...d, [id]: decision }));
       setEditing(false);
       setIndex((i) => Math.min(i + 1, drafts.length - 1));
+
+      if (decision === "approve") {
+        onApprove?.(id);
+      } else if (decision === "reject") {
+        // Keyboard/button reject has no reason field in this one-screen
+        // layout -- prompt for one (backend requires 1-500 chars), falling
+        // back to a generic reason if the reviewer skips the prompt rather
+        // than blocking the reject entirely.
+        const reason =
+          typeof window !== "undefined"
+            ? window.prompt("Reason for rejecting this draft?")?.trim()
+            : undefined;
+        onReject?.(id, reason || "Rejected without a specific reason.");
+      }
     },
-    [drafts.length],
+    [drafts.length, onApprove, onReject],
   );
 
   const toggleSelect = useCallback((id: string) => {
@@ -323,13 +355,15 @@ export function ApprovalReviewScreen({ drafts, quota }: ApprovalReviewScreenProp
           quota={quota}
           onCancel={() => setShowBulkConfirm(false)}
           onConfirm={() => {
+            const ids = Array.from(selected);
             setDecisions((d) => {
               const next = { ...d };
-              selected.forEach((id) => {
+              ids.forEach((id) => {
                 next[id] = "approve";
               });
               return next;
             });
+            onBulkApprove?.(ids);
             setSelected(new Set());
             setShowBulkConfirm(false);
           }}
