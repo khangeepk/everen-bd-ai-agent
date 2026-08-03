@@ -23,6 +23,7 @@ from jwt import PyJWKClient
 
 from app.core.claims import ClaimError, IdentityClaims, normalize_claims
 from app.core.config import Settings, settings
+from app.core.dev_auth import decode_dev_session_token
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +156,22 @@ async def get_identity(
     """
     if credentials is None or not credentials.credentials:
         raise _UNAUTHORIZED
+
+    # Local-dev-only fast path: only ever attempted when app_env != production
+    # (enforced inside decode_dev_session_token itself, not just here) and
+    # only matches tokens minted by app.core.dev_auth -- a real Clerk/Auth.js
+    # token is signed RS256 with that provider's own `iss`, so it can never
+    # decode successfully here and always falls through to the real JWKS
+    # verification below unchanged. See app.core.dev_auth's module docstring.
+    dev_payload = decode_dev_session_token(credentials.credentials)
+    if dev_payload is not None:
+        try:
+            claims = normalize_claims(dev_payload)
+        except ClaimError as exc:
+            logger.warning("Dev session token verified but claims unusable: %s", exc)
+            raise _UNAUTHORIZED from exc
+        logger.info("Request authenticated via local dev session", extra={"subject": claims.subject})
+        return claims
 
     payload = decode_token(credentials.credentials)
     try:

@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/common/EmptyState";
+import { ErrorState } from "@/components/common/ErrorState";
 import { AppShell } from "@/components/layout/AppShell";
 import { LinkedInDraftCard } from "@/components/outreach/LinkedInDraftCard";
 import { fetchLinkedInQueue, type LinkedInQueueOutcome } from "@/lib/outreachQueueApi";
@@ -71,14 +72,16 @@ export default function OutreachQueuePage(): JSX.Element {
       </p>
 
       {outcome?.isMock ? (
-        <div className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700">
-          Showing sample drafts.
-          {outcome.fallbackReason ? ` (${outcome.fallbackReason})` : " Set NEXT_PUBLIC_DEV_API_TOKEN to load the real queue."}
+        <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-amber-700">
+          Sample data -- not a real query. No local dev session could be obtained (is the
+          backend running at NEXT_PUBLIC_API_BASE_URL?).
         </div>
       ) : null}
 
       {isLoading && !outcome ? (
         <p className="text-sm text-slate-400">Loading queue&hellip;</p>
+      ) : outcome?.error ? (
+        <ErrorState message={outcome.error} onRetry={() => void load()} />
       ) : outcome && outcome.items.length === 0 ? (
         <EmptyState
           icon={Inbox}

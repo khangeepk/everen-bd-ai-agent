@@ -7,6 +7,7 @@ from app.api.v1 import (
     audits,
     booking,
     deliverability,
+    dev_auth,
     email_enrichment,
     lead_scores,
     leads,
@@ -19,6 +20,10 @@ from app.api.v1 import (
 )
 
 api_router = APIRouter(prefix="/api/v1")
+# Always mounted (dev/staging/production alike) so its 404-in-production
+# behavior is exercised for real rather than relying on the route never
+# being registered -- see dev_auth.py's _require_non_production().
+api_router.include_router(dev_auth.router)
 api_router.include_router(services.router)
 api_router.include_router(leads.router)
 api_router.include_router(places.router)

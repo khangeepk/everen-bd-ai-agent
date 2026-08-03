@@ -46,7 +46,7 @@ export interface ChatQueryOutcome {
 export async function runLeadsQuery(
   intent: Extract<ParsedIntent, { kind: "leads_list" }>,
 ): Promise<ChatQueryOutcome> {
-  if (!hasApiToken()) {
+  if (!(await hasApiToken())) {
     return { results: mockLeadsResults(intent), isMock: true };
   }
 
@@ -132,7 +132,7 @@ function toLeadResultRow(lead: LeadApiResult): LeadResultRow {
 export async function runPlacesQuery(
   intent: Extract<ParsedIntent, { kind: "places_search" }>,
 ): Promise<ChatQueryOutcome> {
-  if (!hasApiToken()) {
+  if (!(await hasApiToken())) {
     return { results: mockPlacesResults(intent), isMock: true };
   }
 

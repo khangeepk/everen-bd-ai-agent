@@ -27,9 +27,11 @@ export const LINKEDIN_QUEUE_PAGE_SIZE = 50;
 export interface LinkedInQueueOutcome {
   items: LinkedInQueueItem[];
   isMock: boolean;
-  /** Set when a real call was attempted but failed -- shown alongside the
-   * mock fallback so the user knows *why* they're seeing sample data. */
-  fallbackReason?: string;
+  /** Set when a real (token-available) call failed. Callers must show an
+   * error + retry for this case -- NOT fall back to sample data, so a real
+   * outage is never mistaken for "the queue is just empty" or masked behind
+   * cheerful sample drafts. Mirrors src/lib/chatQueries.ts's ChatQueryOutcome. */
+  error?: string;
 }
 
 /**
@@ -38,7 +40,7 @@ export interface LinkedInQueueOutcome {
  * @returns The queue items and whether they're real or mock.
  */
 export async function fetchLinkedInQueue(): Promise<LinkedInQueueOutcome> {
-  if (!hasApiToken()) {
+  if (!(await hasApiToken())) {
     return { items: mockLinkedInQueue, isMock: true };
   }
 
@@ -70,11 +72,9 @@ export async function fetchLinkedInQueue(): Promise<LinkedInQueueOutcome> {
     const items = page.items.map((draft) => toQueueItem(draft, leadsById.get(draft.lead_id)));
     return { items, isMock: false };
   } catch (error) {
-    return {
-      items: mockLinkedInQueue,
-      isMock: true,
-      fallbackReason: describeError(error),
-    };
+    // Token/session was available, so this was a real attempt that failed --
+    // surface it for an explicit retry, never silently swap in sample drafts.
+    return { items: [], isMock: false, error: describeError(error) };
   }
 }
 

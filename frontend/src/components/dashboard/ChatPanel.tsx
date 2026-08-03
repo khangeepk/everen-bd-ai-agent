@@ -1,5 +1,5 @@
 import { Send, Sparkles } from "lucide-react";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { ChatResultsTable } from "@/components/dashboard/ChatResultsTable";
 import { ErrorState } from "@/components/common/ErrorState";
@@ -37,6 +37,23 @@ export function ChatPanel(): JSX.Element {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isRunning, setIsRunning] = useState(false);
+  // hasApiToken() is now async -- obtaining a local dev session (see
+  // src/lib/apiClient.ts) requires a network round trip on first use, so
+  // this can't be read synchronously during render the way a static env var
+  // check could. null = still checking, so the banner doesn't flash on.
+  const [tokenAvailable, setTokenAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void hasApiToken().then((available) => {
+      if (!cancelled) {
+        setTokenAvailable(available);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** Run a runnable intent and append the assistant reply (used by submit + retry). */
   const runIntent = useCallback(async (intent: RunnableIntent): Promise<void> => {
@@ -91,10 +108,10 @@ export function ChatPanel(): JSX.Element {
         title="Ask the pipeline"
       />
 
-      {!hasApiToken() ? (
-        <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-          No API token configured (NEXT_PUBLIC_DEV_API_TOKEN) -- every result below is sample
-          data, not a real query.
+      {tokenAvailable === false ? (
+        <p className="mb-2 rounded-md bg-amber-50 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+          Sample data -- not a real query. No local dev session available (is the backend
+          running at NEXT_PUBLIC_API_BASE_URL?).
         </p>
       ) : null}
 
