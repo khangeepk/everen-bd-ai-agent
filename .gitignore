@@ -1,3 +1,9 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# Real secrets -- never commit. Matches at any depth (backend/.env,
+# frontend/.env, a stray root-level .env, etc.). Template files are named
+# *.env.example, which doesn't end in ".env" so it isn't caught by this.
+# See CLAUDE.md / AGENTS.md section 5.
+*.env

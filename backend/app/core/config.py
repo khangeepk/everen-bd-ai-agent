@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,7 @@ class Settings(BaseSettings):
     auth_jwks_url: str = "https://REPLACE_ME/.well-known/jwks.json"
     auth_issuer: str = "https://REPLACE_ME"
     auth_audience: str = "everen-bd-agent"
-    auth_algorithms: list[str] = Field(default_factory=lambda: ["RS256"])
+    auth_algorithms: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["RS256"])
     auth_jwks_cache_seconds: int = 3600
 
     # Email / Outreach (human-gated -- see AGENTS.md section 8)
@@ -161,7 +162,9 @@ class Settings(BaseSettings):
     #: list, not a guarantee. "s1"/"s2" are SendGrid's own default pair.
     #: Override with the selector(s) shown in your SendGrid domain
     #: authentication setup if they differ.
-    sendgrid_dkim_selectors: list[str] = Field(default_factory=lambda: ["s1", "s2"])
+    sendgrid_dkim_selectors: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["s1", "s2"]
+    )
 
     # Calendar booking (app.services.google_calendar, booking_slots,
     # booking_token; app.api.v1.booking) -- a single shared "sales calendar"
@@ -228,7 +231,7 @@ class Settings(BaseSettings):
     #: Comma-separated in the environment, parsed by _split_csv.
     #: Default covers the major LLM-supported languages; trim to the markets
     #: you actually operate in.
-    outreach_supported_languages: list[str] = Field(
+    outreach_supported_languages: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "en", "es", "fr", "de", "pt", "ar", "zh", "zh-TW", "zh-HK",
             "ja", "ko", "it", "nl", "ru", "hi", "tr", "pl", "sv",
@@ -237,7 +240,7 @@ class Settings(BaseSettings):
         ]
     )
 
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost:5173"]
     )
 

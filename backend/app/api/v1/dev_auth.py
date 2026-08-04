@@ -64,3 +64,31 @@ async def create_dev_session() -> DevSessionResponse:
     token = mint_dev_session_token()
     logger.info("Issued local dev session")
     return DevSessionResponse(access_token=token, expires_in_minutes=DEV_SESSION_TTL_MINUTES)
+
+
+@router.get(
+    "/sentry-test",
+    summary="Deliberately raise an error to verify Sentry capture (non-production only)",
+    description=(
+        "Raises an unhandled exception on purpose. If SENTRY_DSN is set (see "
+        "app.main._configure_sentry), Sentry's Starlette/FastAPI integration "
+        "captures it automatically -- check your Sentry project's Issues tab "
+        "afterward. If SENTRY_DSN is blank, Sentry is a no-op and this just "
+        "produces a normal 500, which is also a valid thing to confirm. "
+        "Always 404s when APP_ENV=production."
+    ),
+)
+async def trigger_sentry_test_error() -> None:
+    """Deliberately raise to verify Sentry error capture end-to-end.
+
+    Raises:
+        HTTPException: 404 when ``settings.is_production`` is True.
+        RuntimeError: Always, in every other environment -- that's the point.
+    """
+    _require_non_production()
+    logger.info("Deliberately triggering a test error for Sentry verification")
+    raise RuntimeError(
+        "Deliberate test error from GET /api/v1/dev/sentry-test -- if this "
+        "shows up in Sentry's Issues tab, PII-scrubbed error capture is "
+        "confirmed working end-to-end."
+    )

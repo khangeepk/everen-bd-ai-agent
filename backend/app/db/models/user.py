@@ -63,7 +63,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole, name="user_role"), nullable=False, default=UserRole.SALES
+        # values_callable is required here: SQLAlchemy's Enum type defaults to
+        # persisting a Python Enum member's *name* (e.g. "ADMIN"), but the
+        # Postgres user_role type (see alembic/versions/20260730_0009_rbac_
+        # roles.py) only has the lowercase *values* ("admin", "sales",
+        # "viewer"). Without this, every insert 500s with "invalid input
+        # value for enum user_role" the moment a role is anything but the
+        # column default.
+        SAEnum(UserRole, name="user_role", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
+        default=UserRole.SALES,
     )
     is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
